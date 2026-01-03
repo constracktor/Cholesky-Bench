@@ -13,7 +13,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
 {
     // Parameters
     int N = std::sqrt(ft_tiles[0].get().size());
-    std::size_t n_tiles =  std::sqrt(ft_tiles.size());
+    std::size_t n_tiles = std::sqrt(ft_tiles.size());
     // Variants
     switch (variant)
     {
@@ -342,12 +342,11 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
     }
 }
 
-void right_looking_cholesky_tiled_loop(
-    Variant variant, Tiled_vector_matrix &tiles)
+void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &tiles)
 {
     // Parameters
     int N = std::sqrt(tiles[0].size());
-    std::size_t n_tiles =  std::sqrt(tiles.size());
+    std::size_t n_tiles = std::sqrt(tiles.size());
     // Variants
     switch (variant)
     {
@@ -457,7 +456,7 @@ void right_looking_cholesky_tiled_mutable(Tiled_mutable_matrix &ft_tiles)
 {
     // Parameters
     int N = std::sqrt(ft_tiles[0].get().size());
-    std::size_t n_tiles =  std::sqrt(ft_tiles.size());
+    std::size_t n_tiles = std::sqrt(ft_tiles.size());
 
     for (std::size_t k = 0; k < n_tiles; k++)
     {

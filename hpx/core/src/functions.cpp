@@ -1,19 +1,12 @@
 #include "functions.hpp"
 
 #include "cholesky_factor.hpp"
-
-
-//#include <hpx/algorithm.hpp>
 #include <hpx/future.hpp>
-
-
 
 namespace cpu
 {
 
-double cholesky_future(
-    Tiled_future_matrix &tiled_matrix,
-    std::string variant)
+double cholesky_future(Tiled_future_matrix &tiled_matrix, std::string variant)
 {
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
@@ -26,10 +19,9 @@ double cholesky_future(
     return (stop - start).count() / 1e9;
 }
 
-double cholesky_loop(Tiled_vector_matrix &tiled_matrix,
-    std::string variant)
+double cholesky_loop(Tiled_vector_matrix &tiled_matrix, std::string variant)
 {
-     auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
     // Launch Cholesky decomposition: K = L * L^T
     right_looking_cholesky_tiled_loop(to_variant(variant), tiled_matrix);

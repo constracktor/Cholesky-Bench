@@ -1,6 +1,8 @@
 #ifndef CPU_CHOLESKY_FACTOR_H
 #define CPU_CHOLESKY_FACTOR_H
 
+#pragma once
+
 #include "tile_data.hpp"
 #include <hpx/future.hpp>
 
@@ -54,8 +56,7 @@ inline Variant to_variant(std::string s)
 
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles);
 
-void right_looking_cholesky_tiled_loop(
-    Variant variant, Tiled_vector_matrix &tiles);
+void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &tiles);
 
 void right_looking_cholesky_tiled_mutable(Tiled_mutable_matrix &ft_tiles);
 

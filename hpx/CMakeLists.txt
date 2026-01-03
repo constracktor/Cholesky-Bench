@@ -1,15 +1,12 @@
 cmake_minimum_required(VERSION 3.23)
 project(cholesky_hpx)
-include(CMakeDependentOption)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # What to build?
 option(BUILD_CORE "Build the core library" ON)
-cmake_dependent_option(ENABLE_MKL "Enable support for Intel oneMKL"
-                       ${PROJECT_IS_TOP_LEVEL} "BUILD_CORE" OFF)
-
+option(ENABLE_MKL "Enable Intel oneMKL support" OFF)
 option(ENABLE_FORMAT_TARGETS "Enable clang-format / cmake-format targets"
        ${PROJECT_IS_TOP_LEVEL})
 
@@ -51,15 +48,15 @@ if(BUILD_CORE)
 
     if(OpenBLAS_LIB)
       message(STATUS "OpenBLAS Library found at ${OpenBLAS_LIB}")
-      find_path(OpenBLAS_INCLUDE_DIR
+      find_path(
+        OpenBLAS_INCLUDE_DIR
         NAMES cblas.h
-        PATH_SUFFIXES openblas
-      )
-    if (NOT OpenBLAS_INCLUDE_DIR)
-      message(FATAL_ERROR "OpenBLAS include directory not found")
-    endif()
+        PATH_SUFFIXES openblas)
+      if(NOT OpenBLAS_INCLUDE_DIR)
+        message(FATAL_ERROR "OpenBLAS include directory not found")
+      endif()
 
-message(STATUS "OpenBLAS include dir: ${OpenBLAS_INCLUDE_DIR}")
+      message(STATUS "OpenBLAS include dir: ${OpenBLAS_INCLUDE_DIR}")
     else()
       message(FATAL_ERROR "No BLAS Library found")
     endif()

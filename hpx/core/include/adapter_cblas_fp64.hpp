@@ -1,6 +1,8 @@
 #ifndef CPU_ADAPTER_CBLAS_FP64_H
 #define CPU_ADAPTER_CBLAS_FP64_H
 
+#pragma once
+
 #include "tile_data.hpp"
 #include <hpx/future.hpp>
 #include <vector>

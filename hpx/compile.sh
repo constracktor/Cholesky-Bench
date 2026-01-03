@@ -38,8 +38,6 @@ fi
 rm -rf build && mkdir build && cd build
 
 cmake -DCMAKE_BUILD_TYPE=Release \
-      -DHPX_IGNORE_BOOST_COMPATIBILITY=ON \
-      -DENABLE_FORMAT_TARGETS=OFF \
-      -DENABLE_MKL=OFF ..
+      -DHPX_IGNORE_BOOST_COMPATIBILITY=ON ..
 make -j
 

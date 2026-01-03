@@ -1,9 +1,5 @@
-set(SOURCE_FILES
-    src/tile_generation.cpp
-    src/tile_data.cpp
-    src/functions.cpp
-    src/cholesky_factor.cpp
-    src/adapter_cblas_fp64.cpp)
+set(SOURCE_FILES src/tile_generation.cpp src/tile_data.cpp src/functions.cpp
+                 src/cholesky_factor.cpp src/adapter_cblas_fp64.cpp)
 
 add_library(cholesky_core STATIC ${SOURCE_FILES})
 
@@ -27,7 +23,7 @@ target_include_directories(
 if(ENABLE_MKL)
   # Link Intel oneMKL
   target_link_libraries(cholesky_core PUBLIC MKL::mkl_intel_lp64 MKL::mkl_core
-                                          MKL::MKL MKL::mkl_sequential)
+                                             MKL::MKL MKL::mkl_sequential)
 else()
   # Link OpenBLAS
   target_link_libraries(cholesky_core PUBLIC ${OpenBLAS_LIB})

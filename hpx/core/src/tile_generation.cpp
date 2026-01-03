@@ -3,24 +3,20 @@
 #include <hpx/algorithm.hpp>
 #include <random>
 
-std::vector<double> gen_tile(
-    std::size_t row,
-    std::size_t col,
-    std::size_t N,
-    std::size_t n_tiles)
+std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)
 {
     std::size_t i_global, j_global;
     double random_value;
     // Create random generator
     size_t seed = row * col;
-    std::mt19937 generator ( seed );
-    std::uniform_real_distribution<double> distribute( 0, 1 );
+    std::mt19937 generator(seed);
+    std::uniform_real_distribution<double> distribute(0, 1);
     // Preallocate required memory
     std::vector<double> tile;
     tile.resize(N * N);
     // Compute entries
     // Check for diagonal tile
-    if( row == col )
+    if (row == col)
     {
         for (std::size_t i = 0; i < N; i++)
         {
@@ -65,23 +61,19 @@ std::vector<double> gen_tile(
     return tile;
 }
 
-mutable_tile_data<double> gen_mutable_tile(
-    std::size_t row,
-    std::size_t col,
-    std::size_t N,
-    std::size_t n_tiles)
+mutable_tile_data<double> gen_mutable_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)
 {
     std::size_t i_global, j_global;
     double random_value;
     // Create random generator
     size_t seed = row * col;
-    std::mt19937 generator ( seed );
-    std::uniform_real_distribution<double> distribute( 0, 1 );
+    std::mt19937 generator(seed);
+    std::uniform_real_distribution<double> distribute(0, 1);
     // Preallocate required memory
-    mutable_tile_data<double> tile{N * N};
+    mutable_tile_data<double> tile{ N * N };
     // Compute entries
     // Check for diagonal tile
-    if( row == col )
+    if (row == col)
     {
         for (std::size_t i = 0; i < N; i++)
         {
@@ -115,9 +107,7 @@ mutable_tile_data<double> gen_mutable_tile(
     return tile;
 }
 
-Tiled_vector_matrix gen_tiled_matrix(
-    std::size_t problem_size,
-    std::size_t n_tiles)
+Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
 {
     std::size_t tile_size = problem_size / n_tiles;
     // Tiled data structure
@@ -137,18 +127,13 @@ Tiled_vector_matrix gen_tiled_matrix(
                 hpx::execution::par,
                 std::size_t{ 0 },
                 i + 1,
-                [&](std::size_t j)
-                {
-                    tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
-                                    });
+                [&](std::size_t j) { tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles); });
         });
 
     return tiled_matrix;
 }
 
-Tiled_future_matrix gen_futurized_tiled_matrix(
-    std::size_t problem_size,
-    std::size_t n_tiles)
+Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
 {
     std::size_t tile_size = problem_size / n_tiles;
     // Tiled data structure
@@ -171,13 +156,11 @@ Tiled_future_matrix gen_futurized_tiled_matrix(
     return tiled_matrix;
 }
 
-Tiled_mutable_matrix gen_mutable_tiled_matrix(
-    std::size_t problem_size,
-    std::size_t n_tiles)
+Tiled_mutable_matrix gen_mutable_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
 {
     std::size_t tile_size = problem_size / n_tiles;
     // Tiled data structure
-    Tiled_mutable_matrix tiled_matrix{n_tiles * n_tiles};
+    Tiled_mutable_matrix tiled_matrix{ n_tiles * n_tiles };
 
     ///////////////////////////////////////////////////////////////////////////
     // Launch synchronous assembly
