@@ -10,7 +10,7 @@ using Tiled_vector_matrix = std::vector<std::vector<double>>;
 
 namespace cpu
 {
-enum class Variant { for_collapse, async_ref, async_val, sync_future, sync_ref, sync_val, loop_one, loop_two };
+enum class Variant { for_collapse, for_split, for_naive, sync_future, sync_ref, sync_val, loop_one, loop_two };
 
 inline Variant to_variant(std::string s)
 {
@@ -18,13 +18,13 @@ inline Variant to_variant(std::string s)
     {
         return Variant::for_collapse;
     }
-    if (s == "async_ref")
+    if (s == "for_split")
     {
-        return Variant::async_ref;
+        return Variant::for_split;
     }
-    if (s == "async_val")
+    if (s == "for_naive")
     {
-        return Variant::async_val;
+        return Variant::for_naive;
     }
 
     if (s == "sync_future")
