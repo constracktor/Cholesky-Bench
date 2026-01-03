@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
         // auto start_potrf = t.now();
         // mkl_potrf(M_pos_1, n_dim);
         // auto stop_potrf = t.now();
-        const int n_tiles = 32;
+        const int n_tiles = 64;
         const int tile_size = n_dim / n_tiles;
         auto test = gen_tiled_matrix(tile_size, n_tiles);
 
