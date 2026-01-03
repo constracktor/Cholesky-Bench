@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
             {
                 std::size_t tile_size = size / n_tiles;
                 // header for output file
-                std::string header = "threads;problem_size;tile_size;n_tiles;";
+                std::string header = "threads;problem_size;tile_size;n_tiles";
                 // runtime config and values
                 std::string values = std::to_string(hpx::get_num_worker_threads());
                 values += std::string(";") + std::to_string(size);

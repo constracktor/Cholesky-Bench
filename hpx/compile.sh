@@ -41,3 +41,5 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DHPX_IGNORE_BOOST_COMPATIBILITY=ON ..
 make -j
 
+cd ..
+./build/cholesky_hpx --hpx:threads=128 #--loop=5
