@@ -3,6 +3,7 @@
 
 #include <hpx/hpx_main.hpp>
 #include <iostream>
+#include <fstream>
 #include <vector>
 
 // bool are_identical(const std::vector<std::vector<double>> &A,
@@ -65,7 +66,15 @@ int main(int argc, char *argv[])
     const std::size_t STOP_TILES = vm["tiles_stop"].as<std::size_t>();
     const std::size_t STEP_TILES = 2;
 
+    // print and write results
     bool HEADER_FLAG = true;
+    std::string runtime_file_path = "runtimes_hpx_cholesky_";
+    if (START_TILES != STOP_TILES) runtime_file_path += std::string("tile_");
+    if (START_SIZE != STOP_SIZE) runtime_file_path += std::string("size_");
+    runtime_file_path += std::to_string(LOOP) + std::string(".txt");
+    std::ofstream runtime_file;
+    runtime_file.open(runtime_file_path, std::ios_base::app);
+
     for (std::size_t n_tiles = START_TILES; n_tiles <= STOP_TILES; n_tiles = n_tiles * STEP_TILES)
     {
         for (std::size_t size = START_SIZE; size <= STOP_SIZE; size = size * STEP_SIZE)
@@ -77,9 +86,9 @@ int main(int argc, char *argv[])
                 std::string header = "threads;problem_size;tile_size;n_tiles;";
                 // runtime config and values
                 std::string values = std::to_string(hpx::get_num_worker_threads());
-                values += ";" + std::to_string(size);
-                values += ";" + std::to_string(size / n_tiles);
-                values += ";" + std::to_string(n_tiles);
+                values += std::string(";") + std::to_string(size);
+                values += std::string(";") + std::to_string(size / n_tiles);
+                values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
                 // futurized
                 std::vector<std::string> f_modes = {
@@ -119,15 +128,19 @@ int main(int argc, char *argv[])
                     values += ";" + std::to_string(cholesky_cpu);
                 }
                 ///////////////////////////////////////////////////////////////////////////
-                // write header once
+                // print/write header only once
                 if (HEADER_FLAG){
                     HEADER_FLAG = false;
                     std::cout << header << std::endl;
+                    runtime_file << header << std::endl;
                 }
+                // print/write runtimes
                 std::cout << values << std::endl;
+                runtime_file << values << std::endl;
             }
         }
     }
 
+    runtime_file.close();
     return 0;
 }
