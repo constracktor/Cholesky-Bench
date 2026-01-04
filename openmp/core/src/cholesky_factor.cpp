@@ -21,14 +21,13 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 // POTRF: Compute Cholesky factor L
                 potrf(tiles[k * n_tiles + k], N);
 
-                // TRSM over the panel below k
 #pragma omp parallel for schedule(static)
                 for (std::size_t m = k + 1; m < n_tiles; ++m)
                 {
+                    // TRSM:  Solve X * L^T = A
                     trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                 }
 
-                // Trailing matrix update
 #pragma omp parallel for collapse(2)
                 for (std::size_t m = k + 1; m < n_tiles; ++m)
                 {
@@ -55,27 +54,24 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 }
             }
             break;
-            break;
         case Variant::for_naive:
             for (std::size_t k = 0; k < n_tiles; ++k)
             {
                 // POTRF: Compute Cholesky factor L
                 potrf(tiles[k * n_tiles + k], N);
 
-// TRSM over the panel below k
 #pragma omp parallel for schedule(static)
                 for (std::size_t m = k + 1; m < n_tiles; ++m)
                 {
+                    // TRSM:  Solve X * L^T = A
                     trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                 }
 
-// Trailing matrix update
 #pragma omp parallel for schedule(static)
                 for (std::size_t m = k + 1; m < n_tiles; ++m)
                 {
                     // SYRK: A = A - B * B^T
                     syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-
                     for (std::size_t n = k + 1; n < m + 1; ++n)
                     {
                         // GEMM: C = C - A * B^T
@@ -98,14 +94,14 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 {
                     for (std::size_t k = 0; k < n_tiles; ++k)
                     {
-                        // POTRF: Cholesky on diagonal tile
+                        // POTRF: Compute Cholesky factor L
                         potrf(tiles[k * n_tiles + k], N);
 
-                        // TRSM: Solve tiles below the diagonal
                         for (std::size_t m = k + 1; m < n_tiles; ++m)
                         {
 #pragma omp task firstprivate(m)
                             {
+                                // TRSM:  Solve X * L^T = A
                                 trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                             }
                         }
@@ -115,14 +111,14 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                         {
 #pragma omp task firstprivate(m)
                             {
-                                // SYRK: Update diagonal tile
+                                // SYRK: A = A - B * B^T
                                 syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
                             }
                             for (std::size_t n = k + 1; n <= m; ++n)
                             {
 #pragma omp task firstprivate(m, n)
                                 {
-                                    // GEMM: Update off-diagonal tile
+                                    // GEMM: C = C - A * B^T
                                     gemm(tiles[m * n_tiles + k],
                                          tiles[n * n_tiles + k],
                                          tiles[m * n_tiles + n],
@@ -139,124 +135,50 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 }
             }
             break;
-        case Variant::task_ref:
+        case Variant::task_depend:
 #pragma omp parallel
             {
 #pragma omp single
                 {
                     for (std::size_t k = 0; k < n_tiles; ++k)
                     {
-                        // -------------------------
-                        // POTRF on diagonal
-                        // -------------------------
-                        auto &Akk = tiles[k * n_tiles + k];
-#pragma omp task depend(inout : Akk)
-                        {
-                            potrf(tiles[k * n_tiles + k], N);
-                        }
-
-                        // -------------------------
-                        // TRSM on panel below diagonal
-                        // -------------------------
-                        for (std::size_t m = k + 1; m < n_tiles; ++m)
-                        {
-                            auto &Amk = tiles[m * n_tiles + k];
-
-#pragma omp task depend(in : Akk) depend(inout : Amk)
-                            {
-                                trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
-                            }
-                        }
-
-                        // -------------------------
-                        // Trailing matrix update
-                        // -------------------------
-                        for (std::size_t m = k + 1; m < n_tiles; ++m)
-                        {
-                            auto &Amk = tiles[m * n_tiles + k];
-
-                            // SYRK diagonal update
-                            auto &Amm = tiles[m * n_tiles + m];
-#pragma omp task depend(in : Amk) depend(inout : Amm)
-                            {
-                                // SYRK: Update diagonal tile
-                                syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-                            }
-
-                            // GEMM off-diagonal updates
-                            for (std::size_t n = k + 1; n < m; ++n)
-                            {
-                                auto &Ank = tiles[n * n_tiles + k];
-                                auto &Amn = tiles[m * n_tiles + n];
-
-#pragma omp task depend(in : Amk, Ank) depend(inout : Amn)
-                                {
-                                    // GEMM: Update off-diagonal tile
-                                    gemm(tiles[m * n_tiles + k],
-                                         tiles[n * n_tiles + k],
-                                         tiles[m * n_tiles + n],
-                                         N,
-                                         N,
-                                         N,
-                                         Blas_no_trans,
-                                         Blas_trans);
-                                }
-                            }
-                        }
-                    }
-#pragma omp taskwait
-                }
-            }
-            break;
-        case Variant::task_pointer:
-#pragma omp parallel
-            {
-#pragma omp single nowait  // nowait is safe and recommended here
-                {
-                    for (std::size_t k = 0; k < n_tiles; ++k)
-                    {
-                        // Diagonal tile: POTRF
-                        const double *Akk_ptr = tiles[k * n_tiles + k].data();
-
-#pragma omp task depend(inout : *Akk_ptr)
+                        auto &tile_kk = tiles[k * n_tiles + k];
+#pragma omp task depend(inout : tile_kk)
                         {
                             // POTRF: Compute Cholesky factor L
                             potrf(tiles[k * n_tiles + k], N);
                         }
 
-                        // Panel below diagonal: TRSM
                         for (std::size_t m = k + 1; m < n_tiles; ++m)
                         {
-                            const double *Amk_ptr = tiles[m * n_tiles + k].data();
+                            auto &tile_mk = tiles[m * n_tiles + k];
 
-#pragma omp task depend(in : *Akk_ptr) depend(inout : *Amk_ptr)
+#pragma omp task depend(in : tile_kk) depend(inout : tile_mk)
                             {
+                                // TRSM:  Solve X * L^T = A
                                 trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                             }
                         }
 
-                        // Trailing submatrix update
                         for (std::size_t m = k + 1; m < n_tiles; ++m)
                         {
-                            const double *Amk_ptr = tiles[m * n_tiles + k].data();
-                            const double *Amm_ptr = tiles[m * n_tiles + m].data();
+                            auto &tile_mk = tiles[m * n_tiles + k];
+                            auto &tile_mm = tiles[m * n_tiles + m];
 
-// Diagonal update: SYRK
-#pragma omp task depend(in : *Amk_ptr) depend(inout : *Amm_ptr)
+#pragma omp task depend(in : tile_mk) depend(inout : tile_mm)
                             {
-                                // SYRK: Update diagonal tile
+                                // SYRK: A = A - B * B^T
                                 syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
                             }
 
-                            // Off-diagonal updates: GEMM
                             for (std::size_t n = k + 1; n < m; ++n)
                             {
-                                const double *Ank_ptr = tiles[n * n_tiles + k].data();
-                                const double *Amn_ptr = tiles[m * n_tiles + n].data();
+                                auto &tile_nk = tiles[n * n_tiles + k];
+                                auto &tile_mn = tiles[m * n_tiles + n];
 
-#pragma omp task depend(in : *Amk_ptr, *Ank_ptr) depend(inout : *Amn_ptr)
+#pragma omp task depend(in : tile_mk, tile_nk) depend(inout : tile_mn)
                                 {
-                                    // GEMM: Update off-diagonal tile
+                                    // GEMM: C = C - A * B^T
                                     gemm(tiles[m * n_tiles + k],
                                          tiles[n * n_tiles + k],
                                          tiles[m * n_tiles + n],
@@ -269,7 +191,6 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                             }
                         }
                     }
-
 #pragma omp taskwait
                 }
             }

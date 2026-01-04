@@ -113,14 +113,11 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(size / n_tiles);
                 values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
-                std::vector<std::string> modes = {
-                    "for_collapse",
-                    "for_naive",
+                std::vector<std::string> modes = { "for_collapse",
+                                                   "for_naive",
 
-                    "task_naive",
-                    "task_pointer",
-                    "task_ref"
-                };
+                                                   "task_naive",
+                                                   "task_depend" };
 
                 for (const auto &mode : modes)
                 {
