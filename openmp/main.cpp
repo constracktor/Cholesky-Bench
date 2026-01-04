@@ -1,6 +1,5 @@
 #include "functions.hpp"
 #include "tile_generation.hpp"
-#include <boost/program_options.hpp>
 #include <fstream>
 #include <iostream>
 #include <omp.h>
