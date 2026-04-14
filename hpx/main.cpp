@@ -95,8 +95,7 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
                 // futurized
-                std::vector<std::string> f_modes = { "async_future", "async_ref", "async_val",
-                                                     "sync_future",  "sync_ref",  "sync_val" };
+                std::vector<std::string> f_modes = { "async_future", "sync_future" };
                 for (const auto &mode : f_modes)
                 {
                     auto f_tiled_matrix = gen_futurized_tiled_matrix(size, n_tiles);
@@ -105,14 +104,6 @@ int main(int argc, char *argv[])
                     header += ";" + mode;
                     values += ";" + std::to_string(cholesky_cpu);
                 }
-                ///////////////////////////////////////////////////////////////////////////
-                // mutable
-                std::string mode = "async_mut";
-                auto mut_tiled_matrix = gen_mutable_tiled_matrix(size, n_tiles);
-                auto cholesky_cpu = cpu::cholesky_mutable(mut_tiled_matrix);
-
-                header += ";" + mode;
-                values += ";" + std::to_string(cholesky_cpu);
                 ///////////////////////////////////////////////////////////////////////////
                 // loop
                 std::vector<std::string> loop_modes = { "loop_one", "loop_two" };

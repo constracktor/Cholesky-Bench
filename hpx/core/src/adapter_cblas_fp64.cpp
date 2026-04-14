@@ -11,17 +11,17 @@
 
 // BLAS level 3 operations
 
-vector_future f_potrf(vector_future f_A, const int N)
+vector f_potrf(vector_future f_A, const int N)
 {
-    auto A = f_A.get();
+    vector A = f_A.get();
     // POTRF: in-place Cholesky decomposition of A
     // use dpotrf2 recursive version for better stability
     LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
     // return factorized matrix L
-    return hpx::make_ready_future(A);
+    return A;
 }
 
-vector_future f_trsm(vector_future f_L,
+vector f_trsm(vector_future f_L,
                      vector_future f_A,
                      const int N,
                      const int M,
@@ -29,8 +29,8 @@ vector_future f_trsm(vector_future f_L,
                      const BLAS_SIDE side_L)
 
 {
-    auto L = f_L.get();
-    auto A = f_A.get();
+    const vector& L = f_L.get();
+    vector A = f_A.get();
     // TRSM constants
     const double alpha = 1.0;
     // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
@@ -48,23 +48,23 @@ vector_future f_trsm(vector_future f_L,
         A.data(),
         M);
     // return vector
-    return hpx::make_ready_future(A);
+    return A;
 }
 
-vector_future f_syrk(vector_future f_A, vector_future f_B, const int N)
+vector f_syrk(vector_future f_A, vector_future f_B, const int N)
 {
-    auto B = f_B.get();
-    auto A = f_A.get();
+    const vector& B = f_B.get();
+    vector A = f_A.get();
     // SYRK constants
     const double alpha = -1.0;
     const double beta = 1.0;
     // SYRK:A = A - B * B^T
     cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
     // return updated matrix A
-    return hpx::make_ready_future(A);
+    return A;
 }
 
-vector_future
+vector
 f_gemm(vector_future f_A,
        vector_future f_B,
        vector_future f_C,
@@ -74,239 +74,9 @@ f_gemm(vector_future f_A,
        const BLAS_TRANSPOSE transpose_A,
        const BLAS_TRANSPOSE transpose_B)
 {
-    auto C = f_C.get();
-    auto B = f_B.get();
-    auto A = f_A.get();
-    // GEMM constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // GEMM: C = C - A(^T) * B(^T)
-    cblas_dgemm(
-        CblasRowMajor,
-        static_cast<CBLAS_TRANSPOSE>(transpose_A),
-        static_cast<CBLAS_TRANSPOSE>(transpose_B),
-        K,
-        M,
-        N,
-        alpha,
-        A.data(),
-        K,
-        B.data(),
-        M,
-        beta,
-        C.data(),
-        M);
-    // return updated matrix C
-    return hpx::make_ready_future(C);
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// call by reference -> no local copy
-
-vector
-r_trsm(const vector &L, vector A, const int N, const int M, const BLAS_TRANSPOSE transpose_L, const BLAS_SIDE side_L)
-
-{
-    // TRSM constants
-    const double alpha = 1.0;
-    // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
-    cblas_dtrsm(
-        CblasRowMajor,
-        static_cast<CBLAS_SIDE>(side_L),
-        CblasLower,
-        static_cast<CBLAS_TRANSPOSE>(transpose_L),
-        CblasNonUnit,
-        N,
-        M,
-        alpha,
-        L.data(),
-        N,
-        A.data(),
-        M);
-    // return vector
-    return A;
-}
-
-vector r_syrk(vector A, const vector &B, const int N)
-{
-    // SYRK constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // SYRK:A = A - B * B^T
-    cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
-    // return updated matrix A
-    return A;
-}
-
-vector r_gemm(const vector &A,
-              const vector &B,
-              vector C,
-              const int N,
-              const int M,
-              const int K,
-              const BLAS_TRANSPOSE transpose_A,
-              const BLAS_TRANSPOSE transpose_B)
-{
-    // GEMM constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // GEMM: C = C - A(^T) * B(^T)
-    cblas_dgemm(
-        CblasRowMajor,
-        static_cast<CBLAS_TRANSPOSE>(transpose_A),
-        static_cast<CBLAS_TRANSPOSE>(transpose_B),
-        K,
-        M,
-        N,
-        alpha,
-        A.data(),
-        K,
-        B.data(),
-        M,
-        beta,
-        C.data(),
-        M);
-    // return updated matrix C
-    return C;
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
-// call by value -> local copy
-vector v_potrf(vector A, const int N)
-{
-    // POTRF: in-place Cholesky decomposition of A
-    // use dpotrf2 recursive version for better stability
-    LAPACKE_dpotrf(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
-    // return factorized matrix L
-    return A;
-}
-
-vector v_trsm(vector L, vector A, const int N, const int M, const BLAS_TRANSPOSE transpose_L, const BLAS_SIDE side_L)
-
-{
-    // TRSM constants
-    const double alpha = 1.0;
-    // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
-    cblas_dtrsm(
-        CblasRowMajor,
-        static_cast<CBLAS_SIDE>(side_L),
-        CblasLower,
-        static_cast<CBLAS_TRANSPOSE>(transpose_L),
-        CblasNonUnit,
-        N,
-        M,
-        alpha,
-        L.data(),
-        N,
-        A.data(),
-        M);
-    // return vector
-    return A;
-}
-
-vector v_syrk(vector A, vector B, const int N)
-{
-    // SYRK constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // SYRK:A = A - B * B^T
-    cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
-    // return updated matrix A
-    return A;
-}
-
-vector v_gemm(vector A,
-              vector B,
-              vector C,
-              const int N,
-              const int M,
-              const int K,
-              const BLAS_TRANSPOSE transpose_A,
-              const BLAS_TRANSPOSE transpose_B)
-{
-    // GEMM constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // GEMM: C = C - A(^T) * B(^T)
-    cblas_dgemm(
-        CblasRowMajor,
-        static_cast<CBLAS_TRANSPOSE>(transpose_A),
-        static_cast<CBLAS_TRANSPOSE>(transpose_B),
-        K,
-        M,
-        N,
-        alpha,
-        A.data(),
-        K,
-        B.data(),
-        M,
-        beta,
-        C.data(),
-        M);
-    // return updated matrix C
-    return C;
-}
-
-////////////////////////////////////////////////////////////////////////
-
-mutable_tile_data<double> m_potrf(const mutable_tile_data<double> &A, const int N)
-{
-    // POTRF: in-place Cholesky decomposition of A
-    // use dpotrf2 recursive version for better stability
-    LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
-    // return factorized matrix L
-    return A;
-}
-
-mutable_tile_data<double>
-m_trsm(const const_tile_data<double> &L,
-       const mutable_tile_data<double> &A,
-       const int N,
-       const int M,
-       const BLAS_TRANSPOSE transpose_L,
-       const BLAS_SIDE side_L)
-{
-    // TRSM constants
-    const double alpha = 1.0;
-    // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
-    cblas_dtrsm(
-        CblasRowMajor,
-        static_cast<CBLAS_SIDE>(side_L),
-        CblasLower,
-        static_cast<CBLAS_TRANSPOSE>(transpose_L),
-        CblasNonUnit,
-        N,
-        M,
-        alpha,
-        L.data(),
-        N,
-        A.data(),
-        M);
-    // return vector
-    return A;
-}
-
-mutable_tile_data<double> m_syrk(const mutable_tile_data<double> &A, const const_tile_data<double> &B, const int N)
-{
-    // SYRK constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // SYRK:A = A - B * B^T
-    cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
-    // return updated matrix A
-    return A;
-}
-
-mutable_tile_data<double>
-m_gemm(const const_tile_data<double> &A,
-       const const_tile_data<double> &B,
-       const mutable_tile_data<double> &C,
-       const int N,
-       const int M,
-       const int K,
-       const BLAS_TRANSPOSE transpose_A,
-       const BLAS_TRANSPOSE transpose_B)
-{
+    vector C = f_C.get();
+    const vector& B = f_B.get();
+    const vector& A = f_A.get();
     // GEMM constants
     const double alpha = -1.0;
     const double beta = 1.0;

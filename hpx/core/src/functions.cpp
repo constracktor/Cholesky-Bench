@@ -30,17 +30,4 @@ double cholesky_loop(Tiled_vector_matrix &tiled_matrix, std::string variant)
     return (stop - start).count() / 1e9;
 }
 
-double cholesky_mutable(Tiled_mutable_matrix &tiled_matrix)
-{
-    auto start = std::chrono::high_resolution_clock::now();
-    ///////////////////////////////////////////////////////////////////////////
-    // Launch Cholesky decomposition: K = L * L^T
-    right_looking_cholesky_tiled_mutable(tiled_matrix);
-    // Synchronize
-    hpx::wait_all(tiled_matrix);
-    ///////////////////////////////////////////////////////////////////////////
-    auto stop = std::chrono::high_resolution_clock::now();
-    return (stop - start).count() / 1e9;
-}
-
 }  // end of namespace cpu

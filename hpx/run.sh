@@ -21,7 +21,7 @@ cd "$SCRIPT_DIR"
 srun --cpu-bind=cores "$SCRIPT_DIR/build/cholesky_hpx" \
     --hpx:threads=128 \
     --loop=20 \
-    --size_start=512 \
+    --size_start=65536 \
     --size_stop=65536 \
     --tiles_start=4 \
-    --tiles_stop=256
+    --tiles_stop=1024

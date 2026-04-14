@@ -42,4 +42,10 @@ cmake -DCMAKE_BUILD_TYPE=Release \
 make -j
 
 cd ..
-./build/cholesky_hpx --hpx:threads=128 #--loop=5
+./build/cholesky_hpx \
+    --hpx:threads=128 \
+    --loop=1 \
+    --size_start=65536 \
+    --size_stop=65536 \
+    --tiles_start=64 \
+    --tiles_stop=64
