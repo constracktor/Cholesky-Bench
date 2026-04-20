@@ -118,4 +118,76 @@ void gemm(const vector &A,
           const int K,
           const BLAS_TRANSPOSE transpose_A,
           const BLAS_TRANSPOSE transpose_B);
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+using void_future = hpx::shared_future<void>;
+
+/**
+ * @brief FP64 In-place Cholesky decomposition of A, synchronized via void futures
+ * @param dep_future dependency future to wait on before executing
+ * @param A matrix to be factorized (mutated in-place)
+ * @param N matrix dimension
+ * @return void future signalling completion
+ */
+void_future potrf_f(void_future dep_future, vector &A, const int N);
+
+/**
+ * @brief FP64 In-place solve L(^T) * X = A or X * L(^T) = A, synchronized via void futures
+ * @param dep_L dependency future for L (must be ready before reading L)
+ * @param dep_A dependency future for A (must be ready before writing A)
+ * @param L Cholesky factor matrix
+ * @param A right hand side matrix (mutated in-place)
+ * @param N first dimension
+ * @param M second dimension
+ * @param transpose_L transpose flag for L
+ * @param side_L side flag for L
+ * @return void future signalling completion
+ */
+void_future trsm_f(void_future dep_L,
+                   void_future dep_A,
+                   vector &L,
+                   vector &A,
+                   const int N,
+                   const int M,
+                   const BLAS_TRANSPOSE transpose_L,
+                   const BLAS_SIDE side_L);
+
+/**
+ * @brief FP64 Symmetric rank-k update: A = A - B * B^T, synchronized via void futures
+ * @param dep_A dependency future for A
+ * @param dep_B dependency future for B
+ * @param A base matrix (mutated in-place)
+ * @param B symmetric update matrix
+ * @param N matrix dimension
+ * @return void future signalling completion
+ */
+void_future syrk_f(void_future dep_A, void_future dep_B, vector &A, const vector &B, const int N);
+
+/**
+ * @brief FP64 General matrix-matrix multiplication: C = C - A(^T) * B(^T), synchronized via void futures
+ * @param dep_A dependency future for A
+ * @param dep_B dependency future for B
+ * @param dep_C dependency future for C
+ * @param A left update matrix
+ * @param B right update matrix
+ * @param C base matrix (mutated in-place)
+ * @param N first matrix dimension
+ * @param M second matrix dimension
+ * @param K third matrix dimension
+ * @param transpose_A transpose flag for A
+ * @param transpose_B transpose flag for B
+ * @return void future signalling completion
+ */
+void_future gemm_f(void_future dep_A,
+                   void_future dep_B,
+                   void_future dep_C,
+                   const vector &A,
+                   const vector &B,
+                   vector &C,
+                   const int N,
+                   const int M,
+                   const int K,
+                   const BLAS_TRANSPOSE transpose_A,
+                   const BLAS_TRANSPOSE transpose_B);
 #endif  // end of CPU_ADAPTER_CBLAS_FP64_H

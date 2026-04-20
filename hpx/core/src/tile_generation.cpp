@@ -109,3 +109,32 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
 
     return tiled_matrix;
 }
+
+void gen_void_tiled_matrix(Tiled_vector_matrix &tiles,
+                           Tiled_void_matrix &dep_tiles,
+                           std::size_t problem_size,
+                           std::size_t n_tiles)
+{
+    std::size_t tile_size = problem_size / n_tiles;
+    // Preallocate both structures (lower-triangular, stored in n_tiles*n_tiles flat array)
+    tiles.resize(n_tiles * n_tiles);
+    dep_tiles.resize(n_tiles * n_tiles);
+
+    // Generate tile data in parallel; initialise each dep_tile with a ready void future
+    hpx::experimental::for_loop(
+        hpx::execution::par,
+        std::size_t{ 0 },
+        std::size_t(n_tiles),
+        [&](std::size_t i)
+        {
+            hpx::experimental::for_loop(
+                hpx::execution::par,
+                std::size_t{ 0 },
+                i + 1,
+                [&](std::size_t j)
+                {
+                    tiles[i * n_tiles + j]     = gen_tile(i, j, tile_size, n_tiles);
+                    dep_tiles[i * n_tiles + j] = hpx::make_ready_future();
+                });
+        });
+}

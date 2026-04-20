@@ -235,4 +235,70 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
         default: std::cout << "Variant not supported.\n"; break;
     }
 }
+
+void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles,
+                                       Tiled_void_matrix &dep_tiles,
+                                       std::size_t n_tiles)
+{
+    // Tile size derived from the first tile
+    int N = static_cast<int>(std::sqrt(tiles[0].size()));
+
+    for (std::size_t k = 0; k < n_tiles; k++)
+    {
+        // POTRF: Cholesky decomposition of diagonal tile [k,k]
+        // Depends only on the previous operation that last wrote [k,k]
+        dep_tiles[k * n_tiles + k] = hpx::dataflow(
+            hpx::annotated_function(potrf_f, "cholesky_potrf"),
+            dep_tiles[k * n_tiles + k],
+            std::ref(tiles[k * n_tiles + k]),
+            N);
+
+        for (std::size_t m = k + 1; m < n_tiles; m++)
+        {
+            // TRSM: Solve X * L^T = A for panel tile [m,k]
+            // Depends on [k,k] being factored and [m,k] not being written by anyone else
+            dep_tiles[m * n_tiles + k] = hpx::dataflow(
+                hpx::annotated_function(trsm_f, "cholesky_trsm"),
+                dep_tiles[k * n_tiles + k],  // dep on L
+                dep_tiles[m * n_tiles + k],  // dep on A
+                std::ref(tiles[k * n_tiles + k]),
+                std::ref(tiles[m * n_tiles + k]),
+                N,
+                N,
+                Blas_trans,
+                Blas_right);
+        }
+
+        for (std::size_t m = k + 1; m < n_tiles; m++)
+        {
+            // SYRK: A[m,m] = A[m,m] - B[m,k] * B[m,k]^T
+            dep_tiles[m * n_tiles + m] = hpx::dataflow(
+                hpx::annotated_function(syrk_f, "cholesky_syrk"),
+                dep_tiles[m * n_tiles + m],  // dep on A
+                dep_tiles[m * n_tiles + k],  // dep on B
+                std::ref(tiles[m * n_tiles + m]),
+                std::cref(tiles[m * n_tiles + k]),
+                N);
+
+            for (std::size_t n = k + 1; n < m; n++)
+            {
+                // GEMM: C[m,n] = C[m,n] - A[m,k] * B[n,k]^T
+                dep_tiles[m * n_tiles + n] = hpx::dataflow(
+                    hpx::annotated_function(gemm_f, "cholesky_gemm"),
+                    dep_tiles[m * n_tiles + k],  // dep on A
+                    dep_tiles[n * n_tiles + k],  // dep on B
+                    dep_tiles[m * n_tiles + n],  // dep on C
+                    std::cref(tiles[m * n_tiles + k]),
+                    std::cref(tiles[n * n_tiles + k]),
+                    std::ref(tiles[m * n_tiles + n]),
+                    N,
+                    N,
+                    N,
+                    Blas_no_trans,
+                    Blas_trans);
+            }
+        }
+    }
+}
+
 }  // end of namespace cpu

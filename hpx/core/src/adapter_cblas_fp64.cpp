@@ -169,3 +169,53 @@ void gemm(const vector &A,
         C.data(),
         M);
 }
+
+//////////////////////////////////////////////////////////
+// Void-future variants: dependency futures are awaited by hpx::dataflow before
+// the lambda is invoked, so by the time the body runs all deps are satisfied.
+// The BLAS call operates directly on the vector& — no copy of tile data.
+
+void_future potrf_f(void_future dep_future, vector &A, const int N)
+{
+    // dep_future already consumed by dataflow; just run in-place
+    potrf(A, N);
+    return hpx::make_ready_future();
+}
+
+void_future trsm_f(void_future dep_L,
+                   void_future dep_A,
+                   vector &L,
+                   vector &A,
+                   const int N,
+                   const int M,
+                   const BLAS_TRANSPOSE transpose_L,
+                   const BLAS_SIDE side_L)
+{
+    // dep_L and dep_A already consumed by dataflow
+    trsm(L, A, N, M, transpose_L, side_L);
+    return hpx::make_ready_future();
+}
+
+void_future syrk_f(void_future dep_A, void_future dep_B, vector &A, const vector &B, const int N)
+{
+    // dep_A and dep_B already consumed by dataflow
+    syrk(A, B, N);
+    return hpx::make_ready_future();
+}
+
+void_future gemm_f(void_future dep_A,
+                   void_future dep_B,
+                   void_future dep_C,
+                   const vector &A,
+                   const vector &B,
+                   vector &C,
+                   const int N,
+                   const int M,
+                   const int K,
+                   const BLAS_TRANSPOSE transpose_A,
+                   const BLAS_TRANSPOSE transpose_B)
+{
+    // dep_A, dep_B, dep_C already consumed by dataflow
+    gemm(A, B, C, N, M, K, transpose_A, transpose_B);
+    return hpx::make_ready_future();
+}

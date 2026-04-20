@@ -116,6 +116,13 @@ int main(int argc, char *argv[])
                     values += ";" + std::to_string(cholesky_cpu);
                 }
                 ///////////////////////////////////////////////////////////////////////////
+                // void-future variant (no vector copies in BLAS operations)
+                {
+                    auto cholesky_cpu = cpu::cholesky_void(size, n_tiles);
+                    header += ";async_void";
+                    values += ";" + std::to_string(cholesky_cpu);
+                }
+                ///////////////////////////////////////////////////////////////////////////
                 // print/write header only once
                 if (HEADER_FLAG)
                 {
