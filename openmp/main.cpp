@@ -1,5 +1,6 @@
 #include "functions.hpp"
 #include "tile_generation.hpp"
+#include "validate.hpp"
 #include <fstream>
 #include <iostream>
 #include <omp.h>
@@ -118,13 +119,27 @@ int main(int argc, char *argv[])
                                                    "task_naive",
                                                    "task_depend" };
 
+                // Relative residual tolerance for the validation step:
+                // ||A - L L^T||_F / ||A||_F. 1e-10 is a loose-but-safe
+                // bound for an FP64 tiled Cholesky on the problem sizes
+                // this benchmark exercises.
+                constexpr double residual_tol = 1e-10;
+
                 for (const auto &mode : modes)
                 {
                     auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
                     auto cholesky_cpu = cpu::cholesky(tiled_matrix, mode);
+                    double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
 
-                    header += ";" + mode;
-                    values += ";" + std::to_string(cholesky_cpu);
+                    header += ";" + mode + ";" + mode + "_residual";
+                    values += ";" + std::to_string(cholesky_cpu) + ";" + std::to_string(residual);
+
+                    if (!(residual <= residual_tol))  // catches NaN too
+                    {
+                        std::cerr << "Validation warning: variant '" << mode << "' residual " << residual
+                                  << " exceeds tolerance " << residual_tol << " (size=" << size
+                                  << ", n_tiles=" << n_tiles << ")" << std::endl;
+                    }
                 }
                 ///////////////////////////////////////////////////////////////////////////
                 // print/write header only once

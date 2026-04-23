@@ -1,5 +1,6 @@
 set(SOURCE_FILES src/tile_generation.cpp src/functions.cpp
-                 src/cholesky_factor.cpp src/adapter_cblas_fp64.cpp)
+                 src/cholesky_factor.cpp src/adapter_cblas_fp64.cpp
+                 src/validate.cpp)
 
 add_library(cholesky_core STATIC ${SOURCE_FILES})
 

@@ -47,4 +47,4 @@ make -j VERBOSE=1
 
 cd ..
 
-OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores ./build/cholesky_openmp #--size_stop 256 --loop 5
+OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores OMP_MAX_TASK_PRIORITY=16 ./build/cholesky_openmp #--size_stop 256 --loop 5
