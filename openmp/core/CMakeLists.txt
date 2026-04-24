@@ -40,6 +40,10 @@ if(ENABLE_MKL)
   target_compile_definitions(cholesky_core PUBLIC ENABLE_MKL)
 endif()
 
+if(ENABLE_DYNAMIC_SCHEDULE)
+  target_compile_definitions(cholesky_core PUBLIC ENABLE_DYNAMIC_SCHEDULE)
+endif()
+
 target_compile_features(cholesky_core PUBLIC cxx_std_17)
 
 set_property(TARGET cholesky_core PROPERTY POSITION_INDEPENDENT_CODE ON)

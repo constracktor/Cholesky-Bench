@@ -5,6 +5,30 @@
 #include <cstddef>
 #include <iostream>
 
+// Trailing-update schedule for the worksharing loops below.
+//
+// We would like schedule(dynamic, 1) for both the collapsed triangular
+// loop in `for_collapse` and the m-loop in `for_naive`, because the
+// per-iteration work is highly non-uniform (SYRK is ~half the FLOPs of a
+// GEMM, and the inner GEMM count grows linearly with m).
+//
+// However, libgomp through GCC 14.x rejects schedule(dynamic, ...) on a
+// non-rectangular collapsed loop nest (it has only implemented static
+// partitioning for non-rectangular spaces). Building with GCC therefore
+// requires the default (static) schedule. LLVM's runtime supports the
+// dynamic case fine.
+//
+// The CMake option ENABLE_DYNAMIC_SCHEDULE picks between the two forms
+// at compile time. _Pragma() is used so the choice can be expressed as a
+// preprocessor switch.
+#ifdef ENABLE_DYNAMIC_SCHEDULE
+#define CHOL_OMP_FOR_TRAILING_COLLAPSE() _Pragma("omp for collapse(2) schedule(dynamic, 1)")
+#define CHOL_OMP_FOR_TRAILING() _Pragma("omp for schedule(dynamic, 1)")
+#else
+#define CHOL_OMP_FOR_TRAILING_COLLAPSE() _Pragma("omp for collapse(2) schedule(static")
+#define CHOL_OMP_FOR_TRAILING() _Pragma("omp for schedule(static)")
+#endif
+
 namespace cpu
 {
 
@@ -52,8 +76,9 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                     // Trailing-matrix update.
                     // dynamic,1 handles the SYRK (~N^3/3 FLOPs) vs GEMM
                     // (~2 N^3 FLOPs) cost asymmetry and the shrinking
-                    // iteration count in late k.
-#pragma omp for collapse(2) schedule(dynamic, 1)
+                    // iteration count in late k. See the comment at the
+                    // top of this file for the GCC vs LLVM caveat.
+                    CHOL_OMP_FOR_TRAILING_COLLAPSE()
                     for (std::size_t m = k + 1; m < n_tiles; ++m)
                     {
                         for (std::size_t n = k + 1; n < m + 1; ++n)
@@ -102,7 +127,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                     // Work per m-iteration grows linearly with m
                     // (one SYRK + (m - k - 1) GEMMs), so dynamic,1 is a
                     // much better fit than static.
-#pragma omp for schedule(dynamic, 1)
+                    CHOL_OMP_FOR_TRAILING()
                     for (std::size_t m = k + 1; m < n_tiles; ++m)
                     {
                         // SYRK: A = A - B * B^T on the diagonal tile.

@@ -13,6 +13,9 @@ option(ENABLE_VALIDATION
 option(DISABLE_COMPUTATION
        "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps wrappers, loops and task graph intact so that OpenMP scheduling overhead can be measured in isolation"
        OFF)
+option(ENABLE_DYNAMIC_SCHEDULE
+       "Use schedule(dynamic, 1) on the trailing-update worksharing loops in for_collapse and for_naive. OFF by default (static schedule) so GCC builds compile out of the box; libgomp through 14.x cannot combine dynamic scheduling with collapse on a non-rectangular nest. Turn ON for LLVM builds where the dynamic schedule is supported and gives better load balancing."
+       OFF)
 option(ENABLE_FORMAT_TARGETS "Enable clang-format / cmake-format targets"
        ${PROJECT_IS_TOP_LEVEL})
 
