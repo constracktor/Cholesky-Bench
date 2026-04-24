@@ -1,6 +1,9 @@
 set(SOURCE_FILES src/tile_generation.cpp src/functions.cpp
-                 src/cholesky_factor.cpp src/adapter_cblas_fp64.cpp
-                 src/validate.cpp)
+                 src/cholesky_factor.cpp src/adapter_cblas_fp64.cpp)
+
+if(ENABLE_VALIDATION)
+  list(APPEND SOURCE_FILES src/validate.cpp)
+endif()
 
 add_library(cholesky_core STATIC ${SOURCE_FILES})
 
@@ -20,8 +23,10 @@ target_link_libraries(cholesky_core PUBLIC OpenMP::OpenMP_CXX)
 target_include_directories(
   cholesky_core PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/core/include>")
 
-# Link BLAS
-if(ENABLE_MKL)
+# Link BLAS (skipped entirely in no-op overhead-only builds).
+if(DISABLE_COMPUTATION)
+  target_compile_definitions(cholesky_core PUBLIC DISABLE_COMPUTATION)
+elseif(ENABLE_MKL)
   # Link Intel oneMKL
   target_link_libraries(cholesky_core PUBLIC MKL::mkl_intel_lp64 MKL::mkl_core
                                              MKL::MKL MKL::mkl_sequential)

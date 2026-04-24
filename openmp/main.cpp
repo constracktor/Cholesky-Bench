@@ -1,6 +1,8 @@
 #include "functions.hpp"
 #include "tile_generation.hpp"
+#ifdef ENABLE_VALIDATION
 #include "validate.hpp"
+#endif
 #include <fstream>
 #include <iostream>
 #include <omp.h>
@@ -119,27 +121,32 @@ int main(int argc, char *argv[])
                                                    "task_naive",
                                                    "task_depend" };
 
-                // Relative residual tolerance for the validation step:
-                // ||A - L L^T||_F / ||A||_F. 1e-10 is a loose-but-safe
-                // bound for an FP64 tiled Cholesky on the problem sizes
-                // this benchmark exercises.
-                constexpr double residual_tol = 1e-10;
-
                 for (const auto &mode : modes)
                 {
                     auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
                     auto cholesky_cpu = cpu::cholesky(tiled_matrix, mode);
-                    double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
 
-                    header += ";" + mode + ";" + mode + "_residual";
-                    values += ";" + std::to_string(cholesky_cpu) + ";" + std::to_string(residual);
+                    header += ";" + mode;
+                    values += ";" + std::to_string(cholesky_cpu);
 
+#ifdef ENABLE_VALIDATION
+                    // Relative residual ||A - L L^T||_F / ||A||_F. 1e-10
+                    // is a loose-but-safe bound for an FP64 tiled
+                    // Cholesky on the problem sizes this benchmark
+                    // exercises. Compiled in only when the CMake option
+                    // ENABLE_VALIDATION is set; not written to the CSV
+                    // output file - purely console.
+                    constexpr double residual_tol = 1e-10;
+                    const double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
+                    std::cout << "[validate] mode=" << mode << " size=" << size << " n_tiles=" << n_tiles
+                              << " residual=" << residual << std::endl;
                     if (!(residual <= residual_tol))  // catches NaN too
                     {
                         std::cerr << "Validation warning: variant '" << mode << "' residual " << residual
                                   << " exceeds tolerance " << residual_tol << " (size=" << size
                                   << ", n_tiles=" << n_tiles << ")" << std::endl;
                     }
+#endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
                 // print/write header only once

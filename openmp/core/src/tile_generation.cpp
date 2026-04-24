@@ -1,9 +1,21 @@
 #include "tile_generation.hpp"
 
+#ifndef DISABLE_COMPUTATION
 #include <random>
+#endif
 
 std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)
 {
+#ifdef DISABLE_COMPUTATION
+    // No-op path for task-overhead measurements: skip the random fill and
+    // return an empty tile. Task dependency addresses work on the vector
+    // object itself, which remains distinct per slot in gen_tiled_matrix.
+    (void)row;
+    (void)col;
+    (void)N;
+    (void)n_tiles;
+    return {};
+#else
     std::size_t i_global, j_global;
     double random_value;
     // Create random generator
@@ -58,16 +70,23 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
     // }
     // std::cout << "\n";
     return tile;
+#endif
 }
 
 Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
 {
-    std::size_t tile_size = problem_size / n_tiles;
     // Tiled data structure
     Tiled_vector_matrix tiled_matrix;
     // Preallocate memory
     tiled_matrix.resize(n_tiles * n_tiles);  // No reserve because of triangular structure
 
+#ifdef DISABLE_COMPUTATION
+    // No-op path: leave all inner vectors empty. Each slot is still a
+    // distinct std::vector<double> object, which is all the OpenMP
+    // depend() clauses need to identify dependencies.
+    (void)problem_size;
+#else
+    std::size_t tile_size = problem_size / n_tiles;
 ///////////////////////////////////////////////////////////////////////////
 // Launch synchronous assembly
 #pragma omp parallel for collapse(2)
@@ -78,6 +97,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
             tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
         }
     }
+#endif
 
     return tiled_matrix;
 }
