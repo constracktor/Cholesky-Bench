@@ -8,39 +8,6 @@
 #include <iostream>
 #include <vector>
 
-// bool are_identical(const std::vector<std::vector<double>> &A,
-//                    const std::vector<std::vector<double>> &B,
-//                    double tol = 1e-14)
-// {
-//     if (A.size() != B.size())
-//     {
-//         std::cout << "Size mismatch: rows " << A.size() << " vs " << B.size() << std::endl;
-//         return false;
-//     }
-//
-//     for (std::size_t i = 0; i < A.size(); ++i)
-//     {
-//         if (A[i].size() != B[i].size())
-//         {
-//             std::cout << "Size mismatch at row " << i << ": cols " << A[i].size() << " vs " << B[i].size() <<
-//             std::endl; return false;
-//         }
-//
-//         for (std::size_t j = 0; j < A[i].size(); ++j)
-//         {
-//             double diff = std::abs(A[i][j] - B[i][j]);
-//             if (diff > tol)
-//             {
-//                 std::cout << "Mismatch at (" << i << "," << j << ")  " << "cpu=" << B[i][j] << " gpu=" << A[i][j]
-//                           << " diff=" << diff << std::endl;
-//                 return false;
-//             }
-//         }
-//     }
-//
-//     return true;
-// }
-
 int main(int argc, char *argv[])
 {
     ///////////////////////////////////////////////////////////////////////////
@@ -104,7 +71,8 @@ int main(int argc, char *argv[])
                 // ENABLE_VALIDATION is set; not written to the CSV
                 // output file - purely console.
                 constexpr double residual_tol = 1e-10;
-                auto report_residual = [&](const std::string &mode, double residual) {
+                auto report_residual = [&](const std::string &mode, double residual)
+                {
                     std::cout << "[validate] mode=" << mode << " size=" << size << " n_tiles=" << n_tiles
                               << " residual=" << residual << std::endl;
                     if (!(residual <= residual_tol))  // catches NaN too
