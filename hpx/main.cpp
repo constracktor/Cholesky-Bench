@@ -1,5 +1,8 @@
 #include "functions.hpp"
 #include "tile_generation.hpp"
+#ifdef ENABLE_VALIDATION
+#include "validate.hpp"
+#endif
 #include <fstream>
 #include <hpx/hpx_main.hpp>
 #include <iostream>
@@ -93,6 +96,26 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(size);
                 values += std::string(";") + std::to_string(size / n_tiles);
                 values += std::string(";") + std::to_string(n_tiles);
+#ifdef ENABLE_VALIDATION
+                // Relative residual ||A - L L^T||_F / ||A||_F. 1e-10
+                // is a loose-but-safe bound for an FP64 tiled
+                // Cholesky on the problem sizes this benchmark
+                // exercises. Compiled in only when the CMake option
+                // ENABLE_VALIDATION is set; not written to the CSV
+                // output file - purely console.
+                constexpr double residual_tol = 1e-10;
+                auto report_residual = [&](const std::string &mode, double residual) {
+                    std::cout << "[validate] mode=" << mode << " size=" << size << " n_tiles=" << n_tiles
+                              << " residual=" << residual << std::endl;
+                    if (!(residual <= residual_tol))  // catches NaN too
+                    {
+                        std::cerr << "Validation warning: variant '" << mode << "' residual " << residual
+                                  << " exceeds tolerance " << residual_tol << " (size=" << size
+                                  << ", n_tiles=" << n_tiles << ")" << std::endl;
+                    }
+                };
+#endif
+
                 ///////////////////////////////////////////////////////////////////////////
                 // futurized
                 std::vector<std::string> f_modes = { "async_future", "sync_future" };
@@ -103,6 +126,21 @@ int main(int argc, char *argv[])
 
                     header += ";" + mode;
                     values += ";" + std::to_string(cholesky_cpu);
+
+#ifdef ENABLE_VALIDATION
+                    // All futures are ready by now (wait_all inside cholesky_future);
+                    // dereference each into a plain matrix for the residual check.
+                    Tiled_vector_matrix L(n_tiles * n_tiles);
+                    for (std::size_t i = 0; i < n_tiles; ++i)
+                    {
+                        for (std::size_t j = 0; j <= i; ++j)
+                        {
+                            L[i * n_tiles + j] = f_tiled_matrix[i * n_tiles + j].get();
+                        }
+                    }
+                    double residual = cpu::cholesky_residual(size, n_tiles, L);
+                    report_residual(mode, residual);
+#endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
                 // loop
@@ -114,13 +152,27 @@ int main(int argc, char *argv[])
 
                     header += ";" + mode;
                     values += ";" + std::to_string(cholesky_cpu);
+
+#ifdef ENABLE_VALIDATION
+                    double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
+                    report_residual(mode, residual);
+#endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
                 // void-future variant (no vector copies in BLAS operations)
                 {
-                    auto cholesky_cpu = cpu::cholesky_void(size, n_tiles);
+                    Tiled_vector_matrix tiles;
+                    Tiled_void_matrix dep_tiles;
+                    gen_void_tiled_matrix(tiles, dep_tiles, size, n_tiles);
+                    auto cholesky_cpu = cpu::cholesky_void(tiles, dep_tiles, n_tiles);
+
                     header += ";async_void";
                     values += ";" + std::to_string(cholesky_cpu);
+
+#ifdef ENABLE_VALIDATION
+                    double residual = cpu::cholesky_residual(size, n_tiles, tiles);
+                    report_residual("async_void", residual);
+#endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
                 // print/write header only once

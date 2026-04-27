@@ -31,12 +31,8 @@ double cholesky_loop(Tiled_vector_matrix &tiled_matrix, std::string variant)
     return (stop - start).count() / 1e9;
 }
 
-double cholesky_void(std::size_t problem_size, std::size_t n_tiles)
+double cholesky_void(Tiled_vector_matrix &tiles, Tiled_void_matrix &dep_tiles, std::size_t n_tiles)
 {
-    Tiled_vector_matrix tiles;
-    Tiled_void_matrix dep_tiles;
-    gen_void_tiled_matrix(tiles, dep_tiles, problem_size, n_tiles);
-
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
     // Launch Cholesky decomposition: K = L * L^T
