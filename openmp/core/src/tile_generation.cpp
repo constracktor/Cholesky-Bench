@@ -8,10 +8,10 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 {
 #ifdef DISABLE_COMPUTATION
     // No-op path for task-overhead measurements: return an empty tile.
-    (void)row;
-    (void)col;
-    (void)N;
-    (void)n_tiles;
+    (void) row;
+    (void) col;
+    (void) N;
+    (void) n_tiles;
     return {};
 #else
     std::size_t i_global, j_global;
@@ -33,7 +33,6 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
             for (std::size_t j = 0; j <= i; j++)
             {
                 j_global = N * col + j;
-                // compute covariance function
                 random_value = distribute(generator);
 
                 if (i_global == j_global)
@@ -81,7 +80,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     // Launch synchronous assembly
 #ifdef DISABLE_COMPUTATION
     // No-op path: leave all inner vectors empty.
-    (void)problem_size;
+    (void) problem_size;
 #else
     std::size_t tile_size = problem_size / n_tiles;
 #pragma omp parallel for collapse(2)

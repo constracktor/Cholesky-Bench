@@ -21,6 +21,8 @@ namespace cpu
  * @param problem_size full matrix dimension (must match the factorization)
  * @param n_tiles      number of tiles per dimension (must match)
  * @param L            factorized matrix in lower-triangular tile storage
+ *
+ * @return relative Frobenius residual
  **/
 double cholesky_residual(std::size_t problem_size, std::size_t n_tiles, const Tiled_vector_matrix &L);
 
