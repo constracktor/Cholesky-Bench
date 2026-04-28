@@ -21,21 +21,21 @@ vector f_potrf(vector_future f_A, const int N)
     // use dpotrf2 recursive version for better stability
     LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
 #else
-    (void)N;
+    (void) N;
 #endif
     // return factorized matrix L
     return A;
 }
 
 vector f_trsm(vector_future f_L,
-                     vector_future f_A,
-                     const int N,
-                     const int M,
-                     const BLAS_TRANSPOSE transpose_L,
-                     const BLAS_SIDE side_L)
+              vector_future f_A,
+              const int N,
+              const int M,
+              const BLAS_TRANSPOSE transpose_L,
+              const BLAS_SIDE side_L)
 
 {
-    const vector& L = f_L.get();
+    const vector &L = f_L.get();
     vector A = f_A.get();
 #ifndef DISABLE_COMPUTATION
     // TRSM constants
@@ -55,11 +55,11 @@ vector f_trsm(vector_future f_L,
         A.data(),
         M);
 #else
-    (void)L;
-    (void)N;
-    (void)M;
-    (void)transpose_L;
-    (void)side_L;
+    (void) L;
+    (void) N;
+    (void) M;
+    (void) transpose_L;
+    (void) side_L;
 #endif
     // return vector
     return A;
@@ -67,7 +67,7 @@ vector f_trsm(vector_future f_L,
 
 vector f_syrk(vector_future f_A, vector_future f_B, const int N)
 {
-    const vector& B = f_B.get();
+    const vector &B = f_B.get();
     vector A = f_A.get();
 #ifndef DISABLE_COMPUTATION
     // SYRK constants
@@ -76,26 +76,25 @@ vector f_syrk(vector_future f_A, vector_future f_B, const int N)
     // SYRK:A = A - B * B^T
     cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
 #else
-    (void)B;
-    (void)N;
+    (void) B;
+    (void) N;
 #endif
     // return updated matrix A
     return A;
 }
 
-vector
-f_gemm(vector_future f_A,
-       vector_future f_B,
-       vector_future f_C,
-       const int N,
-       const int M,
-       const int K,
-       const BLAS_TRANSPOSE transpose_A,
-       const BLAS_TRANSPOSE transpose_B)
+vector f_gemm(vector_future f_A,
+              vector_future f_B,
+              vector_future f_C,
+              const int N,
+              const int M,
+              const int K,
+              const BLAS_TRANSPOSE transpose_A,
+              const BLAS_TRANSPOSE transpose_B)
 {
     vector C = f_C.get();
-    const vector& B = f_B.get();
-    const vector& A = f_A.get();
+    const vector &B = f_B.get();
+    const vector &A = f_A.get();
 #ifndef DISABLE_COMPUTATION
     // GEMM constants
     const double alpha = -1.0;
@@ -117,13 +116,13 @@ f_gemm(vector_future f_A,
         C.data(),
         M);
 #else
-    (void)A;
-    (void)B;
-    (void)N;
-    (void)M;
-    (void)K;
-    (void)transpose_A;
-    (void)transpose_B;
+    (void) A;
+    (void) B;
+    (void) N;
+    (void) M;
+    (void) K;
+    (void) transpose_A;
+    (void) transpose_B;
 #endif
     // return updated matrix C
     return C;
@@ -138,8 +137,8 @@ void potrf(vector &A, const int N)
     // use dpotrf2 recursive version for better stability
     LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
 #else
-    (void)A;
-    (void)N;
+    (void) A;
+    (void) N;
 #endif
 }
 
@@ -165,12 +164,12 @@ void trsm(
         A.data(),
         M);
 #else
-    (void)L;
-    (void)A;
-    (void)N;
-    (void)M;
-    (void)transpose_L;
-    (void)side_L;
+    (void) L;
+    (void) A;
+    (void) N;
+    (void) M;
+    (void) transpose_L;
+    (void) side_L;
 #endif
 }
 
@@ -183,9 +182,9 @@ void syrk(vector &A, const vector &B, const int N)
     // SYRK:A = A - B * B^T
     cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
 #else
-    (void)A;
-    (void)B;
-    (void)N;
+    (void) A;
+    (void) B;
+    (void) N;
 #endif
 }
 
@@ -219,14 +218,14 @@ void gemm(const vector &A,
         C.data(),
         M);
 #else
-    (void)A;
-    (void)B;
-    (void)C;
-    (void)N;
-    (void)M;
-    (void)K;
-    (void)transpose_A;
-    (void)transpose_B;
+    (void) A;
+    (void) B;
+    (void) C;
+    (void) N;
+    (void) M;
+    (void) K;
+    (void) transpose_A;
+    (void) transpose_B;
 #endif
 }
 
@@ -266,17 +265,18 @@ void_future syrk_f(void_future dep_A, void_future dep_B, vector &A, const vector
     return hpx::make_ready_future();
 }
 
-void_future gemm_f(void_future dep_A,
-                   void_future dep_B,
-                   void_future dep_C,
-                   const vector &A,
-                   const vector &B,
-                   vector &C,
-                   const int N,
-                   const int M,
-                   const int K,
-                   const BLAS_TRANSPOSE transpose_A,
-                   const BLAS_TRANSPOSE transpose_B)
+void_future
+gemm_f(void_future dep_A,
+       void_future dep_B,
+       void_future dep_C,
+       const vector &A,
+       const vector &B,
+       vector &C,
+       const int N,
+       const int M,
+       const int K,
+       const BLAS_TRANSPOSE transpose_A,
+       const BLAS_TRANSPOSE transpose_B)
 {
     // dep_A, dep_B, dep_C already consumed by dataflow
     gemm(A, B, C, N, M, K, transpose_A, transpose_B);

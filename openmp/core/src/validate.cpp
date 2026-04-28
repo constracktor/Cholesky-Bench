@@ -58,20 +58,21 @@ double cholesky_residual(std::size_t problem_size, std::size_t n_tiles, const Ti
             {
                 const auto &Lmk = Ltile(m, k);
                 const auto &Lnk = Ltile(n, k);
-                cblas_dgemm(CblasRowMajor,
-                            CblasNoTrans,
-                            CblasTrans,
-                            N,
-                            N,
-                            N,
-                            1.0,
-                            Lmk.data(),
-                            N,
-                            Lnk.data(),
-                            N,
-                            1.0,
-                            C.data(),
-                            N);
+                cblas_dgemm(
+                    CblasRowMajor,
+                    CblasNoTrans,
+                    CblasTrans,
+                    N,
+                    N,
+                    N,
+                    1.0,
+                    Lmk.data(),
+                    N,
+                    Lnk.data(),
+                    N,
+                    1.0,
+                    C.data(),
+                    N);
             }
 
             // Regenerate the original A tile deterministically

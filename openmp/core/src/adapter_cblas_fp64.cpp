@@ -20,8 +20,8 @@ void potrf(vector &A, const int N)
     // use dpotrf2 recursive version for better stability
     LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
 #else
-    (void)A;
-    (void)N;
+    (void) A;
+    (void) N;
 #endif
 }
 
@@ -47,12 +47,12 @@ void trsm(
         A.data(),
         M);
 #else
-    (void)L;
-    (void)A;
-    (void)N;
-    (void)M;
-    (void)transpose_L;
-    (void)side_L;
+    (void) L;
+    (void) A;
+    (void) N;
+    (void) M;
+    (void) transpose_L;
+    (void) side_L;
 #endif
 }
 
@@ -65,9 +65,9 @@ void syrk(vector &A, const vector &B, const int N)
     // SYRK:A = A - B * B^T
     cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
 #else
-    (void)A;
-    (void)B;
-    (void)N;
+    (void) A;
+    (void) B;
+    (void) N;
 #endif
 }
 
@@ -101,13 +101,13 @@ void gemm(const vector &A,
         C.data(),
         M);
 #else
-    (void)A;
-    (void)B;
-    (void)C;
-    (void)N;
-    (void)M;
-    (void)K;
-    (void)transpose_A;
-    (void)transpose_B;
+    (void) A;
+    (void) B;
+    (void) C;
+    (void) N;
+    (void) M;
+    (void) K;
+    (void) transpose_A;
+    (void) transpose_B;
 #endif
 }

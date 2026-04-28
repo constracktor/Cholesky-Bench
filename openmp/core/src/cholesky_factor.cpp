@@ -36,7 +36,6 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
             {
                 for (std::size_t k = 0; k < n_tiles; ++k)
                 {
-
                     // POTRF: Compute Cholesky factor L
 #pragma omp single
                     {
@@ -96,7 +95,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                     }
 
                     // Dynamic scheduling due to triangular structure
-#pragma omp for schedule(dynamic,1)
+#pragma omp for schedule(dynamic, 1)
                     for (std::size_t m = k + 1; m < n_tiles; ++m)
                     {
                         // SYRK: A = A - B * B^T
@@ -245,7 +244,8 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                             // TRSM:  Solve X * L^T = A
 #pragma omp task depend(in : tile_kk) depend(inout : tile_mk) priority(trsm_prio)
                             {
-                                trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);;
+                                trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                                ;
                             }
                         }
 

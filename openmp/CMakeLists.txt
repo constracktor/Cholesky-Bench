@@ -7,22 +7,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # What to build?
 option(BUILD_CORE "Build the core library" ON)
 option(ENABLE_MKL "Enable Intel oneMKL support" OFF)
-option(ENABLE_VALIDATION
-       "Compute ||A - L*L^T||_F / ||A||_F after each factorization (off by default)"
-       OFF)
-option(DISABLE_COMPUTATION
-       "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps wrappers, loops and task graph intact so that OpenMP scheduling overhead can be measured in isolation"
-       OFF)
-option(ENABLE_DYNAMIC_SCHEDULE
-       "Use schedule(dynamic, 1) on the trailing-update worksharing loops in for_collapse. OFF by default so GCC builds compile out of the box. Turn ON for LLVM builds where the dynamic schedule is supported and gives better load balancing."
-       OFF)
+option(
+  ENABLE_VALIDATION
+  "Compute ||A - L*L^T||_F / ||A||_F after each factorization (off by default)"
+  OFF)
+option(
+  DISABLE_COMPUTATION
+  "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps wrappers, loops and task graph intact so that OpenMP scheduling overhead can be measured in isolation"
+  OFF)
+option(
+  ENABLE_DYNAMIC_SCHEDULE
+  "Use schedule(dynamic, 1) on the trailing-update worksharing loops in for_collapse. OFF by default so GCC builds compile out of the box. Turn ON for LLVM builds where the dynamic schedule is supported and gives better load balancing."
+  OFF)
 option(ENABLE_FORMAT_TARGETS "Enable clang-format / cmake-format targets"
        ${PROJECT_IS_TOP_LEVEL})
 
 if(ENABLE_VALIDATION AND DISABLE_COMPUTATION)
-  message(FATAL_ERROR
-          "ENABLE_VALIDATION and DISABLE_COMPUTATION are mutually exclusive: "
-          "residual validation needs a real factorization to check against.")
+  message(
+    FATAL_ERROR
+      "ENABLE_VALIDATION and DISABLE_COMPUTATION are mutually exclusive: "
+      "residual validation needs a real factorization to check against.")
 endif()
 
 if(ENABLE_FORMAT_TARGETS)
@@ -88,7 +92,8 @@ if(BUILD_CORE)
   add_executable(cholesky_openmp main.cpp)
 
   # Link the libraries
-  target_link_libraries(cholesky_openmp PUBLIC Cholesky::core OpenMP::OpenMP_CXX)
+  target_link_libraries(cholesky_openmp PUBLIC Cholesky::core
+                                               OpenMP::OpenMP_CXX)
 
   if(ENABLE_VALIDATION)
     target_compile_definitions(cholesky_openmp PRIVATE ENABLE_VALIDATION)
