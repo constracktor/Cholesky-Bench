@@ -8,14 +8,11 @@
 std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)
 {
 #ifdef DISABLE_COMPUTATION
-    // No-op path for task-overhead measurements: skip the random fill and
-    // return an empty tile. The futurized / void-future paths still hold
-    // distinct vector slots, which is all that is needed for the dataflow
-    // dependency graph to retain its structure.
-    (void)row;
-    (void)col;
-    (void)N;
-    (void)n_tiles;
+    // No-op path for task-overhead measurements: return an empty tile.
+    (void) row;
+    (void) col;
+    (void) N;
+    (void) n_tiles;
     return {};
 #else
     std::size_t i_global, j_global;
@@ -37,7 +34,6 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
             for (std::size_t j = 0; j <= i; j++)
             {
                 j_global = N * col + j;
-                // compute covariance function
                 random_value = distribute(generator);
 
                 if (i_global == j_global)
@@ -60,7 +56,7 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
             }
         }
     }
-    // // print tile
+    // print tile
     // std::cout << "(" << row << "," << col << ")\n";
     // for (std::size_t i = 0; i < N; i++)
     // {
@@ -83,14 +79,10 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     tiled_matrix.resize(n_tiles * n_tiles);  // No reserve because of triangular structure
 
 #ifdef DISABLE_COMPUTATION
-    // No-op path: leave all inner vectors empty. Each slot is still a
-    // distinct std::vector<double> object, which is all the loop / task
-    // schedules need to walk the dependency structure.
-    (void)problem_size;
+    // No-op path: leave all inner vectors empty.
+    (void) problem_size;
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    ///////////////////////////////////////////////////////////////////////////
-    // Launch synchronous assembly
     hpx::experimental::for_loop(
         hpx::execution::par,
         std::size_t{ 0 },
@@ -116,10 +108,8 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
     tiled_matrix.resize(n_tiles * n_tiles);  // No reserve because of triangular structure
 
 #ifdef DISABLE_COMPUTATION
-    // No-op path: populate the lower triangle with ready futures of empty
-    // vectors. Each future still has a unique shared state, which is all
-    // that hpx::dataflow needs to track per-tile dependencies.
-    (void)problem_size;
+    // No-op path: populate the lower triangle with ready futures of empty vectors.
+    (void) problem_size;
     for (std::size_t i = 0; i < n_tiles; i++)
     {
         for (std::size_t j = 0; j <= i; j++)
@@ -129,8 +119,6 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
     }
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    ///////////////////////////////////////////////////////////////////////////
-    // Launch synchronous assembly
     for (std::size_t i = 0; i < n_tiles; i++)
     {
         for (std::size_t j = 0; j <= i; j++)
@@ -145,20 +133,13 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
     return tiled_matrix;
 }
 
-void gen_void_tiled_matrix(Tiled_vector_matrix &tiles,
-                           Tiled_void_matrix &dep_tiles,
-                           std::size_t problem_size,
-                           std::size_t n_tiles)
+Tiled_void_matrix gen_void_tiled_matrix(std::size_t n_tiles)
 {
-    // Preallocate both structures (lower-triangular, stored in n_tiles*n_tiles flat array)
-    tiles.resize(n_tiles * n_tiles);
-    dep_tiles.resize(n_tiles * n_tiles);
+    // Tiled data structure
+    Tiled_void_matrix dep_tiles;
+    // Preallocate memory
+    dep_tiles.resize(n_tiles * n_tiles);  // No reserve because of triangular structure
 
-#ifdef DISABLE_COMPUTATION
-    // No-op path: leave tile vectors empty; just populate the lower
-    // triangle of dep_tiles with ready void futures so dataflow nodes can
-    // fire immediately.
-    (void)problem_size;
     for (std::size_t i = 0; i < n_tiles; i++)
     {
         for (std::size_t j = 0; j <= i; j++)
@@ -166,24 +147,5 @@ void gen_void_tiled_matrix(Tiled_vector_matrix &tiles,
             dep_tiles[i * n_tiles + j] = hpx::make_ready_future();
         }
     }
-#else
-    std::size_t tile_size = problem_size / n_tiles;
-    // Generate tile data in parallel; initialise each dep_tile with a ready void future
-    hpx::experimental::for_loop(
-        hpx::execution::par,
-        std::size_t{ 0 },
-        std::size_t(n_tiles),
-        [&](std::size_t i)
-        {
-            hpx::experimental::for_loop(
-                hpx::execution::par,
-                std::size_t{ 0 },
-                i + 1,
-                [&](std::size_t j)
-                {
-                    tiles[i * n_tiles + j]     = gen_tile(i, j, tile_size, n_tiles);
-                    dep_tiles[i * n_tiles + j] = hpx::make_ready_future();
-                });
-        });
-#endif
+    return dep_tiles;
 }

@@ -11,7 +11,7 @@ option(ENABLE_VALIDATION
        "Compute ||A - L*L^T||_F / ||A||_F after each factorization (off by default)"
        OFF)
 option(DISABLE_COMPUTATION
-       "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps the dataflow / for_loop graph intact so HPX scheduling overhead can be measured in isolation"
+       "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps the dataflow graph intact so HPX scheduling overhead can be measured in isolation"
        OFF)
 option(ENABLE_FORMAT_TARGETS "Enable clang-format / cmake-format targets"
        ${PROJECT_IS_TOP_LEVEL})

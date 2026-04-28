@@ -5,23 +5,25 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=128
-#SBATCH --time=72:00:00
+#SBATCH --time=144:00:00
 #SBATCH --exclusive
+#
+# Usage: run.sh
+#
+# Submit examples:
+#   sbatch run.sh
 
-# Load modules if needed
+# Load modules
 module load gcc/14.2.0
 
-# Get directory where this script resides
+# Resolve directory where the script is located
 SCRIPT_DIR="$(pwd)"
-
-# Ensure the job runs from the script directory
-cd "$SCRIPT_DIR"
 
 # Run executable
 srun --cpu-bind=cores "$SCRIPT_DIR/build/cholesky_hpx" \
-    --hpx:threads=128 \
-    --loop=20 \
-    --size_start=65536 \
-    --size_stop=65536 \
-    --tiles_start=4 \
-    --tiles_stop=1024
+  --hpx:threads=128 \
+  --loop=20 \
+  --size_start=65536 \
+  --size_stop=65536 \
+  --tiles_start=4 \
+  --tiles_stop=1024

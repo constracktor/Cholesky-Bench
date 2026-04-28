@@ -20,8 +20,7 @@ namespace
 {
 
 // Zero the strictly upper triangle of an N x N row-major matrix in place.
-// Used so diagonal L tiles can participate in a plain dgemm without
-// picking up the undefined upper-triangular garbage left by LAPACK potrf.
+// Used so diagonal L tiles can participate in a plain dgemm.
 inline void zero_strict_upper(std::vector<double> &T, int N)
 {
     for (int i = 0; i < N; ++i)
@@ -40,7 +39,6 @@ double cholesky_residual(std::size_t problem_size, std::size_t n_tiles, const Ti
     const int N = static_cast<int>(problem_size / n_tiles);
 
     // Make lower-triangular copies of every diagonal L tile up front.
-    // Off-diagonal L tiles are used as-is (they are fully populated).
     std::vector<std::vector<double>> L_diag(n_tiles);
     for (std::size_t k = 0; k < n_tiles; ++k)
     {
@@ -76,25 +74,24 @@ double cholesky_residual(std::size_t problem_size, std::size_t n_tiles, const Ti
                 {
                     const auto &Lmk = Ltile(m, k);
                     const auto &Lnk = Ltile(n, k);
-                    cblas_dgemm(CblasRowMajor,
-                                CblasNoTrans,
-                                CblasTrans,
-                                N,
-                                N,
-                                N,
-                                1.0,
-                                Lmk.data(),
-                                N,
-                                Lnk.data(),
-                                N,
-                                1.0,
-                                C.data(),
-                                N);
+                    cblas_dgemm(
+                        CblasRowMajor,
+                        CblasNoTrans,
+                        CblasTrans,
+                        N,
+                        N,
+                        N,
+                        1.0,
+                        Lmk.data(),
+                        N,
+                        Lnk.data(),
+                        N,
+                        1.0,
+                        C.data(),
+                        N);
                 }
 
-                // Regenerate the original A tile deterministically. This
-                // avoids having to carry a full second copy of A, which is
-                // critical for large problem sizes.
+                // Regenerate the original A tile deterministically
                 const std::vector<double> A_tile = gen_tile(m, n, static_cast<std::size_t>(N), n_tiles);
 
                 double tile_r = 0.0;

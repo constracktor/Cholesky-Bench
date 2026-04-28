@@ -7,7 +7,7 @@
 
 using Tiled_vector_matrix = std::vector<std::vector<double>>;
 using Tiled_future_matrix = std::vector<hpx::shared_future<std::vector<double>>>;
-using Tiled_void_matrix   = std::vector<hpx::shared_future<void>>;
+using Tiled_void_matrix = std::vector<hpx::shared_future<void>>;
 
 namespace cpu
 {
@@ -39,20 +39,27 @@ inline Variant to_variant(std::string s)
     throw std::invalid_argument("Unknown Variant: " + std::string(s));
 }
 
+/**
+ * @brief Right-looking tiled Cholesky using vector futures for dependency tracking.
+ * @param variant      choose between asyc_future or sync_future
+ * @param ft_tiles     futurized flat lower-triangular tile data (mutated in-place)
+ */
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles);
 
+/**
+ * @brief Right-looking tiled Cholesky using fork-join.
+ * @param variant   choose between loop_one and loop_two
+ * @param tiles     flat lower-triangular tile data (mutated in-place)
+ */
 void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &tiles);
 
 /**
  * @brief Right-looking tiled Cholesky using void futures for dependency tracking.
  *        Tile data lives in @p tiles (no copies); @p dep_tiles carries only completion signals.
  * @param tiles     flat lower-triangular tile data (mutated in-place)
- * @param dep_tiles matching void futures (updated to track each tile's latest operation)
- * @param n_tiles   tiles per dimension
+ * @param dep_tiles matching void futures
  */
-void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles,
-                                       Tiled_void_matrix &dep_tiles,
-                                       std::size_t n_tiles);
+void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_matrix &dep_tiles);
 
 }  // end of namespace cpu
 #endif  // end of CPU_CHOLESKY_FACTOR_H

@@ -31,13 +31,13 @@ double cholesky_loop(Tiled_vector_matrix &tiled_matrix, std::string variant)
     return (stop - start).count() / 1e9;
 }
 
-double cholesky_void(Tiled_vector_matrix &tiles, Tiled_void_matrix &dep_tiles, std::size_t n_tiles)
+double cholesky_void(Tiled_vector_matrix &tiled_matrix, Tiled_void_matrix &dep_tiles)
 {
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
     // Launch Cholesky decomposition: K = L * L^T
-    right_looking_cholesky_tiled_void(tiles, dep_tiles, n_tiles);
-    // Synchronize: wait on all void futures in the lower triangle
+    right_looking_cholesky_tiled_void(tiled_matrix, dep_tiles);
+    // Synchronize
     hpx::wait_all(dep_tiles);
     ///////////////////////////////////////////////////////////////////////////
     auto stop = std::chrono::high_resolution_clock::now();

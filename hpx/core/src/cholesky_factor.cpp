@@ -236,17 +236,15 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
     }
 }
 
-void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles,
-                                       Tiled_void_matrix &dep_tiles,
-                                       std::size_t n_tiles)
+void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_matrix &dep_tiles)
 {
-    // Tile size derived from the first tile
-    int N = static_cast<int>(std::sqrt(tiles[0].size()));
+    // Tile parameters
+    std::size_t n_tiles int N = static_cast<int>(std::sqrt(tiles[0].size()));
+    std::size_t n_tiles = std::sqrt(tiles.size());
 
     for (std::size_t k = 0; k < n_tiles; k++)
     {
-        // POTRF: Cholesky decomposition of diagonal tile [k,k]
-        // Depends only on the previous operation that last wrote [k,k]
+        // POTRF: Compute Cholesky factor L
         dep_tiles[k * n_tiles + k] = hpx::dataflow(
             hpx::annotated_function(potrf_f, "cholesky_potrf"),
             dep_tiles[k * n_tiles + k],
@@ -255,8 +253,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles,
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
-            // TRSM: Solve X * L^T = A for panel tile [m,k]
-            // Depends on [k,k] being factored and [m,k] not being written by anyone else
+            // TRSM: Solve X * L^T = A
             dep_tiles[m * n_tiles + k] = hpx::dataflow(
                 hpx::annotated_function(trsm_f, "cholesky_trsm"),
                 dep_tiles[k * n_tiles + k],  // dep on L
@@ -271,7 +268,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles,
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
-            // SYRK: A[m,m] = A[m,m] - B[m,k] * B[m,k]^T
+            // SYRK: A = A - B * B^T
             dep_tiles[m * n_tiles + m] = hpx::dataflow(
                 hpx::annotated_function(syrk_f, "cholesky_syrk"),
                 dep_tiles[m * n_tiles + m],  // dep on A
@@ -282,7 +279,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles,
 
             for (std::size_t n = k + 1; n < m; n++)
             {
-                // GEMM: C[m,n] = C[m,n] - A[m,k] * B[n,k]^T
+                // SYRK: A[m,m] = A[m,m] - B[m,k] * B[m,k]^T
                 dep_tiles[m * n_tiles + n] = hpx::dataflow(
                     hpx::annotated_function(gemm_f, "cholesky_gemm"),
                     dep_tiles[m * n_tiles + k],  // dep on A

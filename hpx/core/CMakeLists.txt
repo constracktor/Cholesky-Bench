@@ -11,7 +11,6 @@ if(ENABLE_VALIDATION)
   target_compile_definitions(cholesky_core PUBLIC ENABLE_VALIDATION)
 endif()
 
-# We'd like to consume it just as core under the GPRat namespace
 set_property(TARGET cholesky_core PROPERTY EXPORT_NAME core)
 add_library(Cholesky::core ALIAS cholesky_core)
 

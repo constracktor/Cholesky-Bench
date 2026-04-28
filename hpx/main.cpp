@@ -64,12 +64,7 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(size / n_tiles);
                 values += std::string(";") + std::to_string(n_tiles);
 #ifdef ENABLE_VALIDATION
-                // Relative residual ||A - L L^T||_F / ||A||_F. 1e-10
-                // is a loose-but-safe bound for an FP64 tiled
-                // Cholesky on the problem sizes this benchmark
-                // exercises. Compiled in only when the CMake option
-                // ENABLE_VALIDATION is set; not written to the CSV
-                // output file - purely console.
+                // Relative residual ||A - L L^T||_F / ||A||_F
                 constexpr double residual_tol = 1e-10;
                 auto report_residual = [&](const std::string &mode, double residual)
                 {
@@ -83,7 +78,6 @@ int main(int argc, char *argv[])
                     }
                 };
 #endif
-
                 ///////////////////////////////////////////////////////////////////////////
                 // futurized
                 std::vector<std::string> f_modes = { "async_future", "sync_future" };
@@ -96,8 +90,6 @@ int main(int argc, char *argv[])
                     values += ";" + std::to_string(cholesky_cpu);
 
 #ifdef ENABLE_VALIDATION
-                    // All futures are ready by now (wait_all inside cholesky_future);
-                    // dereference each into a plain matrix for the residual check.
                     Tiled_vector_matrix L(n_tiles * n_tiles);
                     for (std::size_t i = 0; i < n_tiles; ++i)
                     {
@@ -127,11 +119,11 @@ int main(int argc, char *argv[])
 #endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
-                // void-future variant (no vector copies in BLAS operations)
+                // void-futures: tile data comes from gen_tiled_matrix (same as the
+                // loop variants); only the dependency-future matrix is variant-specific.
                 {
-                    Tiled_vector_matrix tiles;
-                    Tiled_void_matrix dep_tiles;
-                    gen_void_tiled_matrix(tiles, dep_tiles, size, n_tiles);
+                    auto tiles = gen_tiled_matrix(size, n_tiles);
+                    auto dep_tiles = gen_void_tiled_matrix(n_tiles);
                     auto cholesky_cpu = cpu::cholesky_void(tiles, dep_tiles, n_tiles);
 
                     header += ";async_void";

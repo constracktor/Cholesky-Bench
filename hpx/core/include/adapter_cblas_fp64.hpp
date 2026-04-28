@@ -6,6 +6,7 @@
 #include <hpx/future.hpp>
 #include <vector>
 
+using void_future = hpx::shared_future<void>;
 using vector_future = hpx::shared_future<std::vector<double>>;
 using vector = std::vector<double>;
 
@@ -35,11 +36,11 @@ vector f_potrf(vector_future f_A, const int N);
  * @return solution matrix X
  */
 vector f_trsm(vector_future f_L,
-                     vector_future f_A,
-                     const int N,
-                     const int M,
-                     const BLAS_TRANSPOSE transpose_L,
-                     const BLAS_SIDE side_L);
+              vector_future f_A,
+              const int N,
+              const int M,
+              const BLAS_TRANSPOSE transpose_L,
+              const BLAS_SIDE side_L);
 
 /**
  * @brief FP64 Symmetric rank-k update: A = A - B * B^T
@@ -62,15 +63,14 @@ vector f_syrk(vector_future f_A, vector_future f_B, const int N);
  * @param transpose_B transpose right matrix
  * @return updated matrix X
  */
-vector
-f_gemm(vector_future f_A,
-       vector_future f_B,
-       vector_future f_C,
-       const int N,
-       const int M,
-       const int K,
-       const BLAS_TRANSPOSE transpose_A,
-       const BLAS_TRANSPOSE transpose_B);
+vector f_gemm(vector_future f_A,
+              vector_future f_B,
+              vector_future f_C,
+              const int N,
+              const int M,
+              const int K,
+              const BLAS_TRANSPOSE transpose_A,
+              const BLAS_TRANSPOSE transpose_B);
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,8 +120,6 @@ void gemm(const vector &A,
           const BLAS_TRANSPOSE transpose_B);
 
 ///////////////////////////////////////////////////////////////////////////////////////
-
-using void_future = hpx::shared_future<void>;
 
 /**
  * @brief FP64 In-place Cholesky decomposition of A, synchronized via void futures
@@ -179,15 +177,16 @@ void_future syrk_f(void_future dep_A, void_future dep_B, vector &A, const vector
  * @param transpose_B transpose flag for B
  * @return void future signalling completion
  */
-void_future gemm_f(void_future dep_A,
-                   void_future dep_B,
-                   void_future dep_C,
-                   const vector &A,
-                   const vector &B,
-                   vector &C,
-                   const int N,
-                   const int M,
-                   const int K,
-                   const BLAS_TRANSPOSE transpose_A,
-                   const BLAS_TRANSPOSE transpose_B);
+void_future
+gemm_f(void_future dep_A,
+       void_future dep_B,
+       void_future dep_C,
+       const vector &A,
+       const vector &B,
+       vector &C,
+       const int N,
+       const int M,
+       const int K,
+       const BLAS_TRANSPOSE transpose_A,
+       const BLAS_TRANSPOSE transpose_B);
 #endif  // end of CPU_ADAPTER_CBLAS_FP64_H
