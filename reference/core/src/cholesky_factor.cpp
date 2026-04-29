@@ -28,6 +28,15 @@ void parallel_blas_cholesky(Variant variant, std::vector<double> &A, int N)
             throw std::invalid_argument(
                 "Variant 'plasma' requested but the binary was built without ENABLE_PLASMA=ON");
 #endif
+
+        case Variant::plasma_tile:
+#ifdef ENABLE_PLASMA
+            plasma_tile_cholesky(A, N);
+            return;
+#else
+            throw std::invalid_argument(
+                "Variant 'plasma_tile' requested but the binary was built without ENABLE_PLASMA=ON");
+#endif
     }
 }
 

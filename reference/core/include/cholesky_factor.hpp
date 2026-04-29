@@ -13,12 +13,14 @@ namespace cpu
 /**
  * @brief Reference Cholesky variants.
  *
- *   - reference : single threaded LAPACKE_dpotrf2 call (no tiling; parallelism
- *                 lives entirely inside the threaded BLAS).
- *   - plasma    : single plasma_dpotrf call (PLASMA's own tiled parallel
- *                 Cholesky over the OpenMP runtime).
+ *   - reference   : single threaded LAPACKE_dpotrf2 call (no tiling;
+ *                   parallelism lives entirely inside the threaded BLAS).
+ *   - plasma      : single plasma_dpotrf call (PLASMA's high-level
+ *                   synchronous Cholesky over the OpenMP runtime).
+ *   - plasma_tile : plasma_omp_dpotrf called over a manually-built tile
+ *                   descriptor (PLASMA's asynchronous tile interface).
  */
-enum class Variant { reference, plasma };
+enum class Variant { reference, plasma, plasma_tile };
 
 inline Variant to_variant(const std::string &s)
 {
@@ -29,6 +31,10 @@ inline Variant to_variant(const std::string &s)
     if (s == "plasma")
     {
         return Variant::plasma;
+    }
+    if (s == "plasma_tile")
+    {
+        return Variant::plasma_tile;
     }
     throw std::invalid_argument("Unknown Variant: " + s);
 }

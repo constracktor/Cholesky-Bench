@@ -6,9 +6,12 @@
 #ifdef ENABLE_PLASMA
 #include <plasma.h>
 #endif
+#include <cmath>
 #include <cstddef>
+#include <exception>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <omp.h>
 #include <stdexcept>
 #include <string>
@@ -91,19 +94,57 @@ int main(int argc, char *argv[])
             values += std::string(";") + std::to_string(1);
             ///////////////////////////////////////////////////////////////////
             // Reference modes:
-            //   reference -> single threaded LAPACKE_dpotrf2 on the full matrix
-            //   plasma    -> single plasma_dpotrf (added when ENABLE_PLASMA=ON)
-            std::vector<std::string> modes = { "reference" };
+            //   reference   -> single threaded LAPACKE_dpotrf2 on the full
+            //                  matrix (currently disabled; uncomment the
+            //                  initializer below to re-enable)
+            //   plasma      -> single plasma_dpotrf (high-level synchronous
+            //                  PLASMA API; added when ENABLE_PLASMA=ON)
+            //   plasma_tile -> plasma_omp_dpotrf over a manually-built
+            //                  plasma_desc_t (PLASMA's asynchronous tile
+            //                  interface; added when ENABLE_PLASMA=ON)
+            std::vector<std::string> modes = {
+                // "reference",
+            };
 #ifdef ENABLE_PLASMA
             modes.push_back("plasma");
+            modes.push_back("plasma_tile");
 #endif
 
             for (const auto &mode : modes)
             {
-                auto A = gen_matrix(size);
-                auto cholesky_cpu = cpu::cholesky(A, size, mode);
-
                 header += ";" + mode;
+
+                // We let one mode fail (e.g. PLASMA running out of memory at
+                // very large N -- its high-level wrapper allocates an extra
+                // tiled triangular copy on top of the input buffer) without
+                // killing the whole sweep. The failed cell is recorded as NaN
+                // and we continue with the next mode and size.
+                std::vector<double> A;
+                try
+                {
+                    A = gen_matrix(size);
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << "Error: gen_matrix(size=" << size << ") threw '" << e.what()
+                              << "'. Recording NaN for variant '" << mode << "'." << std::endl;
+                    values += ";nan";
+                    continue;
+                }
+
+                double cholesky_cpu = std::numeric_limits<double>::quiet_NaN();
+                try
+                {
+                    cholesky_cpu = cpu::cholesky(A, size, mode);
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << "Error: variant '" << mode << "' failed at size=" << size << ": " << e.what()
+                              << ". Recording NaN and continuing." << std::endl;
+                    values += ";nan";
+                    continue;
+                }
+
                 values += ";" + std::to_string(cholesky_cpu);
 
 #ifdef ENABLE_VALIDATION
