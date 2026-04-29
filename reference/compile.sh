@@ -56,12 +56,12 @@ if command -v spack &>/dev/null; then
   # Get current hostname
   HOSTNAME=$(hostname -s)
 
-  if [[ "$HOSTNAME" == "ipvs-epyc1" ]]; then
+  if [[ "$HOSTNAME" == "ipvs-epyc1" || "$HOSTNAME" == "ipvs-epyc2" ]]; then
     # Compiler
     select_toolchain
     if [[ "$ENABLE_MKL" == "OFF" ]]; then
       # OpenBLAS built with OpenMP threading
-      spack load openblas@0.3.28%gcc@14.2.0 threads=openmp
+      spack load openblas@0.3.28%gcc@14.2.0 threads=openmp ilp64=true
     fi
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
