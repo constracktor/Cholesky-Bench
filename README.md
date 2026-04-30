@@ -30,7 +30,7 @@ Cholesky-Bench benchmarks right-looking tiled Cholesky factorization from fork-j
 |------|-------------|
 | `reference` | Single threaded `LAPACKE_dpotrf` call on the full matrix; no tiling. Parallelism is delegated entirely to a threaded BLAS (OpenBLAS built with `threads=openmp`, or threaded Intel oneMKL via `ENABLE_MKL=ON`). |
 | `plasma` | Single `plasma_dpotrf` call on the full matrix (PLASMA's high-level synchronous API). PLASMA does its own tiled, OpenMP-task-based parallel Cholesky internally; tile size is left at PLASMA's built-in default. Built only when `ENABLE_PLASMA=ON`. |
-| `plasma_tile` | `plasma_omp_dpotrf` over a manually-built `plasma_desc_t` (PLASMA's asynchronous tile interface). Allocates the tile-layout backing store in user code (so PLASMA's `_create` routines never run) and wraps it via `plasma_desc_general_init`, which avoids the int32 overflow that bounds the `plasma` mode. Built only when `ENABLE_PLASMA=ON`. |
+| `plasma_tile` | `plasma_omp_dpotrf` over a manually-built `plasma_desc_t` (PLASMA's asynchronous tile interface). Allocates an *uninitialised* general (full N×N) tile-layout backing store in user code and wraps it via `plasma_desc_general_init` — PLASMA's `_create` routines never run. Leaving the buffer uninitialised lets `plasma_omp_dge2desc` first-touch each tile from its consuming core, so pages land on the right NUMA node and a chunk of the runtime gap with `plasma` closes. Built only when `ENABLE_PLASMA=ON`. |
 
 This directory is the natural baseline for the OpenMP and HPX tiled implementations: the `reference` mode isolates the contribution of vendor-provided dense-LA parallelism, and the two `plasma*` modes add true tiled-parallel competitors that use the same OpenMP runtime as the in-house variants.
 
@@ -38,12 +38,12 @@ This directory is the natural baseline for the OpenMP and HPX tiled implementati
 
 PLASMA 24.8.7's `plasma_desc_*_create()` routines compute their tile-storage size as `int * int` before casting to `size_t`, which silently overflows once the padded tile-area exceeds `INT32_MAX`:
 
-| Path | Behaviour past the boundary (default `nb=256`) |
-|------|------------------------------------------------|
-| `plasma` (high-level, triangular descriptor) | Skipped for `N > 65280`. The benchmark detects the overflow condition before invoking PLASMA and records `nan` for that cell instead of triggering PLASMA's multi-line `malloc() failed` diagnostic. |
-| `plasma_tile` (tile API, user-allocated buffer) | Continues to run. The tile path allocates its own tile-layout backing store with `size_t` arithmetic and wraps it via `plasma_desc_general_init`, so no `_create`/malloc happens inside PLASMA at all. The int32 ceiling does not apply. |
+| Path | Boundary (default `nb=256`) | Behaviour past the boundary |
+|------|------------------------------|------------------------------|
+| `plasma` (high-level, triangular descriptor) | `N > 65280` | Skipped before invoking PLASMA. Records `nan` instead of triggering PLASMA's multi-line `malloc() failed` diagnostic. |
+| `plasma_tile` (tile API, user-allocated general buffer) | `N > 46080` | Skipped before invoking PLASMA. The user-allocated buffer avoids `_create`'s malloc-overflow, but PLASMA does additional int32 tile-offset arithmetic *during execution* of `plasma_omp_dpotrf`, which segfaults past this boundary. The guard makes the failure clean. |
 
-Patching `(size_t)` casts into `control/descriptor.c` in the spack PLASMA package removes the ceiling for the high-level path too and the guard becomes a no-op.
+Patching `(size_t)` casts into `control/descriptor.c` and the tile-offset code in the spack PLASMA package removes both ceilings, and the guards become no-ops.
 
 ## Dependencies
 

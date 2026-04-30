@@ -4,6 +4,7 @@
 
 #include <climits>
 #include <cstddef>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -27,8 +28,11 @@ constexpr int kPlasmaDefaultNb = 256;
 // invoking PLASMA, which avoids the multi-line PLASMA ERROR diagnostic on
 // stderr and keeps the surrounding sweep clean.
 //
-// Only used for the high-level path. The tile path bypasses _create entirely
-// by allocating its tile buffer in user code, so it does not need this.
+// Used for both paths. The high-level path needs it because of the malloc
+// inside _create; the tile path needs it because PLASMA also does int32
+// tile-offset arithmetic *during execution* (segfaults at N>~46080 with the
+// general descriptor and default nb), even though we allocate the buffer
+// ourselves and bypass _create entirely.
 void guard_descriptor_overflow(int N, int nb, bool triangular, const char *which)
 {
     const long long mt = (N + nb - 1) / nb;
@@ -66,36 +70,44 @@ void plasma_cholesky(std::vector<double> &A, int N)
 
 void plasma_tile_cholesky(std::vector<double> &A, int N)
 {
-    // The tile path sidesteps PLASMA 24.8.7's int32 overflow in
-    // plasma_desc_general_create() by *allocating the tile-layout backing
-    // store ourselves* and handing PLASMA a descriptor that merely wraps
-    // it. plasma_desc_general_init does no malloc, so the buggy
-    // multiplication is never reached. Our std::vector handles size_t
-    // arithmetic correctly and frees the buffer on scope exit.
+    // Pre-flight: PLASMA does int32 tile-offset arithmetic during execution
+    // (not just inside _create), so the general descriptor still hits an
+    // overflow ceiling at N>~46080 with the default nb. Without this guard
+    // plasma_omp_dpotrf segfaults rather than failing cleanly.
+    guard_descriptor_overflow(N, kPlasmaDefaultNb, /*triangular=*/false, "plasma_omp_dpotrf");
+
+    // The tile path bypasses PLASMA's _create allocator (which has the
+    // int32-multiply malloc bug) by allocating the tile-layout backing
+    // store ourselves and wrapping it with plasma_desc_general_init. _init
+    // performs no malloc, so the buggy multiplication is never reached.
     //
-    // PLASMA may still hit additional int math on its internal tile-offset
-    // computations during execution; if so, plasma_omp_dpotrf will mark
-    // the sequence with a non-zero status, we'll throw, and main.cpp's
-    // try/catch will record nan for this cell. But the malloc-overflow
-    // failure that hits at N>~46080 with the create path is gone.
+    // The buffer is *uninitialised* (new double[N], not value-initialised
+    // with std::vector). Two reasons: (1) skips a multi-GB zero-init pass
+    // run on the main thread, and (2) lets plasma_omp_dge2desc first-touch
+    // each tile from its consuming core, so pages land on the right NUMA
+    // node instead of all on the main thread's node. That's what shaves
+    // time off the general-descriptor tile path here.
+
     const int nb = kPlasmaDefaultNb;
     const long long mt_ll = (N + nb - 1) / nb;
     const int mt = static_cast<int>(mt_ll);
     const int lm = mt * nb;  // padded leading dimension; fits int32 even for huge N
+
     const std::size_t tile_buf_elements = static_cast<std::size_t>(lm) * static_cast<std::size_t>(lm);
-    std::vector<double> tile_buf(tile_buf_elements);
+
+    std::unique_ptr<double[]> tile_buf(new double[tile_buf_elements]);
 
     plasma_desc_t descA;
-    int retval = plasma_desc_general_init(PlasmaRealDouble, tile_buf.data(), nb, nb, lm, lm, 0, 0, N, N, &descA);
+    int retval =
+        plasma_desc_general_init(PlasmaRealDouble, tile_buf.get(), nb, nb, lm, lm, 0, 0, N, N, &descA);
     if (retval != PlasmaSuccess)
     {
         throw std::runtime_error("plasma_desc_general_init failed with retval=" + std::to_string(retval));
     }
 
     // PLASMA 24.8.7's tile interface uses stack-allocated sequence/request
-    // structs (no plasma_sequence_create/destroy, no PlasmaRequestInitializer
-    // macro). Zero-init lands status=0=PlasmaSuccess, which is the expected
-    // pre-call state for both structs.
+    // structs. Zero-init lands status=0=PlasmaSuccess, the expected
+    // pre-call state.
     plasma_sequence_t sequence{};
     plasma_request_t request{};
 
@@ -110,9 +122,6 @@ void plasma_tile_cholesky(std::vector<double> &A, int N)
         plasma_omp_dpotrf(PlasmaUpper, descA, &sequence, &request);
         plasma_omp_ddesc2ge(descA, A.data(), N, &sequence, &request);
     }
-
-    // No plasma_desc_destroy: the descriptor never owned the buffer (we did),
-    // and tile_buf goes out of scope here. No sequence destroy: stack-alloc.
 
     if (sequence.status != PlasmaSuccess)
     {
