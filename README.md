@@ -139,7 +139,7 @@ All three directories contain a `run.sh` that is a ready-to-submit SLURM batch s
 sbatch openmp/run.sh             # gcc runtime (default)
 sbatch openmp/run.sh llvm        # llvm runtime
 sbatch hpx/run.sh
-sbatch reference/run.sh
+sbatch reference/run.sh          # gcc runtime; defaults to N=65280 (see PLASMA boundary note)
 ```
 
 ### Command-line arguments
@@ -171,7 +171,7 @@ The `reference/` binary reports a `reference` column (suppressed by `DISABLE_BLA
 
 ```
 threads;problem_size;tile_size;n_tiles;reference;plasma
-128;65280;65280;1;2.71;68.12
+128;65280;65280;1;5.21;68.12
 ```
 
 The same lines are also printed to stdout.
@@ -229,14 +229,14 @@ The same lines are also printed to stdout.
         │   ├── cholesky_factor.hpp
         │   ├── functions.hpp
         │   ├── matrix_generation.hpp
-        │   ├── plasma_factor.hpp     # only used when ENABLE_PLASMA=ON
+        │   ├── adapter_plasma_fp64.hpp  # only used when ENABLE_PLASMA=ON
         │   ├── validate.hpp
         │   └── adapter_cblas_fp64.hpp
         └── src/
             ├── cholesky_factor.cpp
             ├── functions.cpp
             ├── matrix_generation.cpp
-            ├── plasma_factor.cpp     # only built when ENABLE_PLASMA=ON
+            ├── adapter_plasma_fp64.cpp  # only built when ENABLE_PLASMA=ON
             ├── validate.cpp
             └── adapter_cblas_fp64.cpp
 ```

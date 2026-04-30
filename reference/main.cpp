@@ -6,7 +6,6 @@
 #ifdef ENABLE_PLASMA
 #include <plasma.h>
 #endif
-#include <cmath>
 #include <cstddef>
 #include <exception>
 #include <fstream>
@@ -21,12 +20,6 @@ int main(int argc, char *argv[])
 {
     ///////////////////////////////////////////////////////////////////////////
     // cmdline arguments
-    //
-    // The reference benchmark calls a single threaded LAPACKE_dpotrf on the
-    // full matrix, so there is no tiling axis. We still accept --tiles_start
-    // / --tiles_stop for CLI compatibility with the openmp/ and hpx/ binaries
-    // (they are silently ignored), which keeps any shared driver script
-    // unchanged.
     std::size_t loop = 1;
     std::size_t size_start = 32, size_stop = 128;
 
@@ -71,8 +64,6 @@ int main(int argc, char *argv[])
     runtime_file.open(runtime_file_path, std::ios_base::app);
 
 #ifdef ENABLE_PLASMA
-    // PLASMA spins up its own context and worker pool; do this once so the
-    // cost is not folded into any timed factorisation.
     if (plasma_init() != 0)
     {
         throw std::runtime_error("plasma_init() failed");
@@ -81,23 +72,18 @@ int main(int argc, char *argv[])
 
     for (std::size_t input_size = START_SIZE; input_size <= STOP_SIZE; input_size = input_size * STEP_SIZE)
     {
-        // PLASMA 24.8.7's triangular descriptor allocation overflows int32 for
+        // PLASMA's triangular descriptor allocation overflows int32 for
         // N>65280 with the default nb=256. For sweep sizes in (65280, 65536]
-        // we transparently clamp the working size down to 65280 so the row
-        // still produces a real plasma timing instead of a nan. Sizes beyond
+        // we transparently clamp the working size down to 65280. Sizes beyond
         // 65536 fall through and the per-mode catch handler records nan.
         std::size_t size = input_size;
-        if (size > 65280 && size <= 65536)
+        if (size > 65'280 && size <= 65'536)
         {
-            size = 65280;
+            size = 65'280;
         }
 
         for (std::size_t l = 0; l < LOOP; l++)
         {
-            // header for output file -- columns mirror the openmp/hpx output so
-            // results from all three benchmarks can be merged on (problem_size).
-            // The reference has no tiling, so tile_size == problem_size and
-            // n_tiles == 1.
             std::string header = "threads;problem_size;tile_size;n_tiles";
             std::string values = std::to_string(omp_get_max_threads());
             values += std::string(";") + std::to_string(size);
@@ -105,11 +91,6 @@ int main(int argc, char *argv[])
             values += std::string(";") + std::to_string(1);
             ///////////////////////////////////////////////////////////////////
             // Reference modes:
-            //   reference -> single threaded LAPACKE_dpotrf2 on the full
-            //                matrix. Enabled by default; disable at build
-            //                time with DISABLE_BLAS_REFERENCE=ON.
-            //   plasma    -> single plasma_dpotrf (high-level synchronous
-            //                PLASMA API). Built only when ENABLE_PLASMA=ON.
             std::vector<std::string> modes = {};
 #ifndef DISABLE_BLAS_REFERENCE
             modes.push_back("reference");
@@ -122,28 +103,12 @@ int main(int argc, char *argv[])
             {
                 header += ";" + mode;
 
-                // We let one mode fail (e.g. PLASMA running out of memory at
-                // very large N -- its high-level wrapper allocates an extra
-                // tiled triangular copy on top of the input buffer) without
-                // killing the whole sweep. The failed cell is recorded as NaN
-                // and we continue with the next mode and size.
-                std::vector<double> A;
-                try
-                {
-                    A = gen_matrix(size);
-                }
-                catch (const std::exception &e)
-                {
-                    std::cerr << "Error: gen_matrix(size=" << size << ") threw '" << e.what()
-                              << "'. Recording NaN for variant '" << mode << "'." << std::endl;
-                    values += ";nan";
-                    continue;
-                }
-
+                std::vector<double> matrix = gen_matrix(size);
+                // NaN guard
                 double cholesky_cpu = std::numeric_limits<double>::quiet_NaN();
                 try
                 {
-                    cholesky_cpu = cpu::cholesky(A, size, mode);
+                    cholesky_cpu = cpu::cholesky(matrix, size, mode);
                 }
                 catch (const std::exception &e)
                 {
@@ -158,7 +123,7 @@ int main(int argc, char *argv[])
 #ifdef ENABLE_VALIDATION
                 // Validate by computing relative residual ||A - L L^T||_F / ||A||_F
                 constexpr double residual_tol = 1e-10;
-                const double residual = cpu::cholesky_residual(size, A);
+                const double residual = cpu::cholesky_residual(size, matrix);
                 std::cout << "[validate] mode=" << mode << " size=" << size << " residual=" << residual << std::endl;
                 if (!(residual <= residual_tol))  // catches NaN too
                 {

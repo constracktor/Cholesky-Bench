@@ -13,9 +13,8 @@ namespace cpu
 /**
  * @brief Reference Cholesky variants.
  *
- *   - reference : single threaded LAPACKE_dpotrf2 call (no tiling;
- *                 parallelism lives entirely inside the threaded BLAS).
- *   - plasma    : single plasma_dpotrf call (PLASMA's high-level
+ *   - reference : threaded LAPACKE_dpotrf2 call
+ *   - plasma    : plasma_dpotrf call (PLASMA's high-level
  *                 synchronous Cholesky over the OpenMP runtime).
  */
 enum class Variant { reference, plasma };
@@ -35,10 +34,10 @@ inline Variant to_variant(const std::string &s)
 
 /**
  * @brief Run the requested reference variant on the full row-major N x N
- *        matrix @p A. Factorisation is in place; @p A holds the lower
+ *        matrix. Factorization is in place; @p matrix holds the lower
  *        triangular factor L on return.
  */
-void parallel_blas_cholesky(Variant variant, std::vector<double> &A, int N);
+void parallel_cholesky(Variant variant, std::vector<double> &matrix, int N);
 
 }  // end of namespace cpu
 #endif  // end of CPU_CHOLESKY_FACTOR_H

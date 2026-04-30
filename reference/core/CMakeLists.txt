@@ -6,7 +6,7 @@ if(ENABLE_VALIDATION)
 endif()
 
 if(ENABLE_PLASMA)
-  list(APPEND SOURCE_FILES src/plasma_factor.cpp)
+  list(APPEND SOURCE_FILES src/adapter_plasma_fp64.cpp)
 endif()
 
 add_library(cholesky_core STATIC ${SOURCE_FILES})
@@ -33,8 +33,7 @@ if(ENABLE_MKL)
     cholesky_core PUBLIC MKL::mkl_intel_lp64 MKL::mkl_core MKL::MKL
                          MKL::mkl_intel_thread)
 else()
-  # Link threaded OpenBLAS (the library name is the same; threading is
-  # determined by the OpenBLAS build that compile.sh's Spack env selects).
+  # Link threaded OpenBLAS
   target_link_libraries(cholesky_core PUBLIC ${OpenBLAS_LIB})
   target_include_directories(cholesky_core PUBLIC ${OpenBLAS_INCLUDE_DIR})
 endif()
@@ -57,8 +56,6 @@ target_compile_features(cholesky_core PUBLIC cxx_std_17)
 set_property(TARGET cholesky_core PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
-  # We need to manually install those into CMAKE_INSTALL_INCLUDEDIR. Below
-  # install(TARGETS ...) only setups the paths for the exported targets.
   install(
     DIRECTORY include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"

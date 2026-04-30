@@ -12,30 +12,24 @@
 #
 # Submit example:
 #   sbatch run.sh
-#
-# Runs the parallel-BLAS reference benchmark — a single threaded
-# LAPACKE_dpotrf call on the full matrix — as a baseline for the OpenMP and
-# HPX tiled implementations. GCC only.
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
 ################################################################################
-# Toolchain runtime selection (gcc only)
+# Toolchain runtime selection
 ################################################################################
 module load gcc/14.2.0
 
 # Resolve directory where the script is located
 SCRIPT_DIR="$(pwd)"
 
-# OpenMP settings — the threaded BLAS picks these up to spread dpotrf across
-# all the cores. Both OpenBLAS (threads=openmp) and threaded MKL respect the
-# standard OMP_* environment.
+# OpenMP settings
 export OMP_NUM_THREADS=128
 export OMP_PROC_BIND=close
 export OMP_PLACES=cores
 
 # Make sure threaded MKL uses the OpenMP runtime if ENABLE_MKL=ON was used at
-# build time. Harmless when linking OpenBLAS.
+# build time.
 export MKL_NUM_THREADS=${MKL_NUM_THREADS:-$OMP_NUM_THREADS}
 
 echo "Running with gcc runtime"
@@ -43,5 +37,5 @@ echo "Running with gcc runtime"
 # Run executable
 srun --cpu-bind=cores "$SCRIPT_DIR/build/cholesky_reference" \
   --loop 20 \
-  --size_start 65536 \
+  --size_start 1024 \
   --size_stop 65536

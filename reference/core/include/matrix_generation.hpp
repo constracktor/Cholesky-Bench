@@ -12,11 +12,7 @@
  * Entries are uniform on [0, 1) using a per-row seed; the diagonal is shifted
  * by +N to guarantee strict diagonal dominance and therefore symmetric
  * positive definiteness. The result is stored as a single contiguous
- * std::vector<double> of length N*N in row-major order, ready to be passed to
- * LAPACKE_dpotrf.
- *
- * Generation is parallelised with OpenMP across rows so it does not dominate
- * the timed factorisation phase.
+ * std::vector<double> of length N*N in row-major order.
  *
  * @param N matrix dimension
  * @return owning row-major buffer of length N*N

@@ -36,19 +36,11 @@ if(ENABLE_FORMAT_TARGETS)
 endif()
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
-  # Our installs follow the standard GNU directory layout. This include needs to
-  # come first since we need the CMAKE_INSTALL_* in the CMakeLists.txt of each
-  # target.
   include(GNUInstallDirs)
 endif()
 
 if(BUILD_CORE)
   if(ENABLE_MKL)
-    # Threaded Intel oneMKL: ask MKL to use its OpenMP runtime ('intel_thread').
-    # This is the only difference from the OpenMP/HPX builds, which pin
-    # MKL_THREADING=sequential because they parallelise at the tile level.
-    # Here the parallelism lives inside dpotrf itself, so we want the
-    # vendor-threaded backend.
     set(MKL_INTERFACE_FULL "intel_lp64")
     set(MKL_THREADING "intel_thread")
     find_package(MKL CONFIG REQUIRED)
@@ -59,9 +51,6 @@ if(BUILD_CORE)
       message(FATAL_ERROR "No BLAS Library found")
     endif()
   else()
-    # Threaded OpenBLAS. The library name is the same as the sequential one,
-    # but the Spack environment loaded by compile.sh selects an OpenBLAS built
-    # with threads=openmp.
     find_library(OpenBLAS_LIB NAMES openblas REQUIRED)
 
     if(OpenBLAS_LIB)
@@ -80,14 +69,9 @@ if(BUILD_CORE)
     endif()
   endif()
 
-  # OpenMP is required for the matrix-generation parallel loop and to pick up
-  # the OpenMP runtime that threaded OpenBLAS / threaded MKL share.
   find_package(OpenMP REQUIRED)
 
   if(ENABLE_PLASMA)
-    # PLASMA exposes its own tiled parallel Cholesky (plasma_dpotrf). Spack
-    # installs it as a single shared library plus a coreblas helper; we look
-    # for both and link whichever is present.
     find_path(PLASMA_INCLUDE_DIR plasma.h)
     if(NOT PLASMA_INCLUDE_DIR)
       message(FATAL_ERROR "ENABLE_PLASMA=ON but plasma.h was not found")

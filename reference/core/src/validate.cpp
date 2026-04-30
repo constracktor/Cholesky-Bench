@@ -8,7 +8,6 @@
 #include "cblas.h"
 #endif
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -19,9 +18,6 @@ namespace cpu
 double cholesky_residual(std::size_t N, const std::vector<double> &L)
 {
     // Build a working copy of L with its strictly upper triangle zeroed out.
-    // dpotrf with uplo='L' leaves the upper triangle untouched (it still
-    // contains the original A values), so we must mask it before forming
-    // L * L^T with a plain dgemm.
     std::vector<double> Lwork(L);
     for (std::size_t i = 0; i < N; ++i)
     {
@@ -49,7 +45,7 @@ double cholesky_residual(std::size_t N, const std::vector<double> &L)
         LLt.data(),
         static_cast<int>(N));
 
-    // Regenerate the original A deterministically and accumulate Frobenius
+    // Regenerate the original matrix A deterministically and accumulate Frobenius
     // norms of (A - LLt) and A.
     const std::vector<double> A = gen_matrix(N);
 

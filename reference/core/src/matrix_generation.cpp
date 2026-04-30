@@ -5,15 +5,11 @@
 
 std::vector<double> gen_matrix(std::size_t N)
 {
-    // Row-major dense buffer
     std::vector<double> A(N * N);
 
     // The matrix is built row by row in parallel. Each row uses its own RNG
     // seeded by the row index, so the matrix is deterministic and
-    // reproducible regardless of the number of threads. Off-diagonal entries
-    // are mirrored to keep A symmetric; the diagonal is shifted by +N to
-    // guarantee strict diagonal dominance (and therefore SPD), mirroring the
-    // +N*n_tiles shift used by the tiled variants when n_tiles == 1.
+    // reproducible regardless of the number of threads.
 #pragma omp parallel for schedule(static)
     for (std::size_t i = 0; i < N; ++i)
     {

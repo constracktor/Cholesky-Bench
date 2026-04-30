@@ -1,22 +1,21 @@
 #!/bin/bash
 # Usage: compile.sh
 #
-# Builds the parallel-BLAS reference benchmark: a single threaded
+# Builds the parallel-BLAS reference benchmark: a single tile parallel
 # LAPACKE_dpotrf call on the full matrix, used as a baseline against the
-# tiled OpenMP / HPX implementations. GCC only.
+# tiled fork-join and tasking implementations.
 #
 # CMake project options can be overridden via environment variables
 # (defaults match the project's CMakeLists.txt defaults):
-#   ENABLE_MKL          ON|OFF  (default OFF) - link threaded Intel oneMKL
-#                                               instead of threaded OpenBLAS
-#   ENABLE_PLASMA       ON|OFF  (default OFF) - also build the PLASMA tiled
-#                                               Cholesky variant (extra
-#                                               'plasma' column in the output)
-#   DISABLE_BLAS_REFERENCE    ON|OFF  (default OFF) - skip the LAPACKE_dpotrf
-#                                               reference mode at runtime
-#                                               (linking unchanged)
-#   ENABLE_VALIDATION   ON|OFF  (default OFF) - residual check after each
-#                                               factorisation
+#   ENABLE_MKL             ON|OFF  (default OFF) - link threaded Intel oneMKL
+#                                                  instead of threaded OpenBLAS
+#   ENABLE_PLASMA          ON|OFF  (default OFF) - also build the PLASMA
+#                                                  plasma_dpotrf variant (extra
+#                                                  'plasma' column in the output)
+#   DISABLE_BLAS_REFERENCE ON|OFF  (default OFF) - skip the LAPACKE_dpotrf
+#                                                  reference at runtime
+#   ENABLE_VALIDATION      ON|OFF  (default OFF) - residual check after each
+#                                                  factorization
 #
 # Examples:
 #   ./compile.sh
@@ -46,7 +45,7 @@ for var in ENABLE_MKL ENABLE_PLASMA DISABLE_BLAS_REFERENCE ENABLE_VALIDATION; do
 done
 
 ################################################################################
-# Toolchain selection (gcc only)
+# Toolchain selection
 ################################################################################
 select_toolchain() {
   module load gcc/14.2.0
@@ -57,12 +56,11 @@ select_toolchain() {
 ################################################################################
 # Configurations
 #
-# The reference benchmark uses *threaded* OpenBLAS / MKL — that is the whole
-# point of this directory. The OpenMP and HPX builds, by contrast, pin the
-# BLAS to its sequential variant because they parallelise at the tile level.
+# The reference benchmark uses *threaded* BLAS as they operate on a single tile
+# and do not parallelize at the tile level.
 ################################################################################
 if command -v spack &>/dev/null; then
-  echo "Spack command found. Loading libraries (gcc)"
+  echo "Spack command found. Loading libraries."
   # Get current hostname
   HOSTNAME=$(hostname -s)
 
@@ -74,7 +72,7 @@ if command -v spack &>/dev/null; then
       spack load openblas@0.3.28%gcc@14.2.0 threads=openmp ilp64=true
     fi
     if [[ "$ENABLE_PLASMA" == "ON" ]]; then
-      spack load plasma%gcc@14.2.0
+      spack load plasma%gcc@14.2.0 ^openblas@0.3.28%gcc@14.2.0 threads=openmp
     fi
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
@@ -82,10 +80,10 @@ if command -v spack &>/dev/null; then
     select_toolchain
     if [[ "$ENABLE_MKL" == "OFF" ]]; then
       # OpenBLAS built with OpenMP threading
-      spack load openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=openmp
+      spack load openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=openmp ilp64=true
     fi
     if [[ "$ENABLE_PLASMA" == "ON" ]]; then
-      spack load plasma%gcc@14.2.0 arch=linux-almalinux9-zen3
+      spack load plasma%gcc@14.2.0 arch=linux-almalinux9-zen3 openblas@0.3.28%gcc@14.2.0 threads=openmp
     fi
 
   else
@@ -116,4 +114,5 @@ make -j VERBOSE=1
 cd ..
 
 # Launch Example
-# OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores ./build/cholesky_reference --size_start 65536 --size_stop 65536 --loop 20
+# OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores \
+# ./build/cholesky_reference --size_start 1024 --size_stop 65536 --loop 1

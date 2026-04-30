@@ -126,7 +126,7 @@ void gemm(const vector &A,
  * @param dep_future dependency future to wait on before executing
  * @param A matrix to be factorized (mutated in-place)
  * @param N matrix dimension
- * @return void future signalling completion
+ * @return void future signaling completion
  */
 void_future potrf_f(void_future dep_future, vector &A, const int N);
 
@@ -140,7 +140,7 @@ void_future potrf_f(void_future dep_future, vector &A, const int N);
  * @param M second dimension
  * @param transpose_L transpose flag for L
  * @param side_L side flag for L
- * @return void future signalling completion
+ * @return void future signaling completion
  */
 void_future trsm_f(void_future dep_L,
                    void_future dep_A,
@@ -158,7 +158,7 @@ void_future trsm_f(void_future dep_L,
  * @param A base matrix (mutated in-place)
  * @param B symmetric update matrix
  * @param N matrix dimension
- * @return void future signalling completion
+ * @return void future signaling completion
  */
 void_future syrk_f(void_future dep_A, void_future dep_B, vector &A, const vector &B, const int N);
 
@@ -175,7 +175,7 @@ void_future syrk_f(void_future dep_A, void_future dep_B, vector &A, const vector
  * @param K third matrix dimension
  * @param transpose_A transpose flag for A
  * @param transpose_B transpose flag for B
- * @return void future signalling completion
+ * @return void future signaling completion
  */
 void_future
 gemm_f(void_future dep_A,
