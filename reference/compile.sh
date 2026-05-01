@@ -12,8 +12,8 @@
 #   ENABLE_PLASMA          ON|OFF  (default OFF) - also build the PLASMA
 #                                                  plasma_dpotrf variant (extra
 #                                                  'plasma' column in the output)
-#   DISABLE_BLAS_REFERENCE ON|OFF  (default OFF) - skip the LAPACKE_dpotrf
-#                                                  reference at runtime
+#   ENABLE_LAPACKE         ON|OFF  (default ON)  - run the LAPACKE_dpotrf
+#                                                  reference mode at runtime
 #   ENABLE_VALIDATION      ON|OFF  (default OFF) - residual check after each
 #                                                  factorization
 #
@@ -21,7 +21,7 @@
 #   ./compile.sh
 #   ENABLE_MKL=ON ./compile.sh
 #   ENABLE_PLASMA=ON ./compile.sh
-#   DISABLE_BLAS_REFERENCE=ON ENABLE_PLASMA=ON ./compile.sh
+#   ENABLE_LAPACKE=OFF ENABLE_PLASMA=ON ./compile.sh
 #   ENABLE_VALIDATION=ON ./compile.sh
 ################################################################################
 set -e # Exit immediately if a command exits with a non-zero status.
@@ -31,10 +31,10 @@ set -e # Exit immediately if a command exits with a non-zero status.
 ################################################################################
 : "${ENABLE_MKL:=OFF}"
 : "${ENABLE_PLASMA:=OFF}"
-: "${DISABLE_BLAS_REFERENCE:=OFF}"
+: "${ENABLE_LAPACKE:=ON}"
 : "${ENABLE_VALIDATION:=OFF}"
 
-for var in ENABLE_MKL ENABLE_PLASMA DISABLE_BLAS_REFERENCE ENABLE_VALIDATION; do
+for var in ENABLE_MKL ENABLE_PLASMA ENABLE_LAPACKE ENABLE_VALIDATION; do
   case "${!var}" in
   ON | OFF) ;;
   *)
@@ -99,15 +99,15 @@ fi
 rm -rf build && mkdir build && cd build
 
 echo "CMake options:"
-echo "  ENABLE_MKL             = $ENABLE_MKL"
-echo "  ENABLE_PLASMA          = $ENABLE_PLASMA"
-echo "  DISABLE_BLAS_REFERENCE = $DISABLE_BLAS_REFERENCE"
-echo "  ENABLE_VALIDATION      = $ENABLE_VALIDATION"
+echo "  ENABLE_MKL        = $ENABLE_MKL"
+echo "  ENABLE_PLASMA     = $ENABLE_PLASMA"
+echo "  ENABLE_LAPACKE    = $ENABLE_LAPACKE"
+echo "  ENABLE_VALIDATION = $ENABLE_VALIDATION"
 
 cmake -DCMAKE_BUILD_TYPE=Release \
   -DENABLE_MKL="$ENABLE_MKL" \
   -DENABLE_PLASMA="$ENABLE_PLASMA" \
-  -DDISABLE_BLAS_REFERENCE="$DISABLE_BLAS_REFERENCE" \
+  -DENABLE_LAPACKE="$ENABLE_LAPACKE" \
   -DENABLE_VALIDATION="$ENABLE_VALIDATION" \
   ..
 make -j VERBOSE=1

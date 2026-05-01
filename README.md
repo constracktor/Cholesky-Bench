@@ -28,7 +28,7 @@ Cholesky-Bench benchmarks right-looking tiled Cholesky factorization from fork-j
 
 | Mode | Description |
 |------|-------------|
-| `lapacke` | Single threaded `LAPACKE_dpotrf` call on the full matrix; no tiling. Parallelism is delegated entirely to a threaded BLAS (OpenBLAS built with `threads=openmp`, or threaded Intel oneMKL via `ENABLE_MKL=ON`). Enabled by default; disable with `DISABLE_BLAS_REFERENCE=ON`. |
+| `lapacke` | Single threaded `LAPACKE_dpotrf` call on the full matrix; no tiling. Parallelism is delegated entirely to a threaded BLAS (OpenBLAS built with `threads=openmp`, or threaded Intel oneMKL via `ENABLE_MKL=ON`). Enabled by default; disable with `ENABLE_LAPACKE=OFF`. |
 | `plasma` | Single `plasma_dpotrf` call on the full matrix (PLASMA's high-level synchronous API). PLASMA does its own tiled, OpenMP-task-based parallel Cholesky internally; tile size is left at PLASMA's built-in default. Built only when `ENABLE_PLASMA=ON`. |
 
 This directory is the natural baseline for the OpenMP and HPX tiled implementations: the `lapacke` mode isolates the contribution of vendor-provided dense-LA parallelism, and the `plasma` mode adds a tiled-parallel competitor that uses the same OpenMP runtime as the in-house variants.
@@ -82,7 +82,7 @@ These can be set as environment variables before calling `compile.sh`:
 | `ENABLE_DYNAMIC_SCHEDULE` | `OFF` | *(`openmp/` only)* Use `schedule(dynamic,1)` on the trailing-update worksharing loops in `for_collapse`. Requires the LLVM toolchain; rejected at compile time with GCC. |
 | `ENABLE_MKL` | `OFF` | Link against Intel oneMKL instead of OpenBLAS. In `openmp/` and `hpx/` this is the *sequential* MKL; in `reference/` it is the *threaded* MKL. |
 | `ENABLE_PLASMA` | `OFF` | *(`reference/` only)* Also build the PLASMA `plasma_dpotrf` variant. Adds a `plasma` column alongside `lapacke` in the runtime output. |
-| `DISABLE_BLAS_REFERENCE` | `OFF` | *(`reference/` only)* Skip the `lapacke` mode at runtime, so only `plasma` runs (when `ENABLE_PLASMA=ON`). Linking is unchanged — PLASMA and validation still need cblas/lapacke symbols. |
+| `ENABLE_LAPACKE` | `ON` | *(`reference/` only)* Run the `lapacke` mode at runtime. Set `OFF` to skip it (e.g. when only `plasma` is wanted). Linking is unchanged either way — PLASMA and validation still need cblas/lapacke symbols. |
 
 **Examples:**
 
@@ -103,7 +103,7 @@ ENABLE_MKL=ON ./compile.sh
 ENABLE_PLASMA=ON ./compile.sh
 
 # Reference: PLASMA only, skip the LAPACKE_dpotrf column at runtime
-DISABLE_BLAS_REFERENCE=ON ENABLE_PLASMA=ON ./compile.sh
+ENABLE_LAPACKE=OFF ENABLE_PLASMA=ON ./compile.sh
 ```
 
 ## Run
@@ -165,7 +165,7 @@ threads;problem_size;tile_size;n_tiles;for_collapse;for_naive;task_naive;task_de
 128;65536;1024;64;3.14;3.21;2.98;2.87
 ```
 
-The `reference/` binary reports a `lapacke` column (suppressed by `DISABLE_BLAS_REFERENCE=ON`) plus a `plasma` column when built with `ENABLE_PLASMA=ON`, with `tile_size = problem_size` and `n_tiles = 1`, so its runtime files merge cleanly with the tiled benchmarks on the `problem_size` key:
+The `reference/` binary reports a `lapacke` column (suppressed by `ENABLE_LAPACKE=OFF`) plus a `plasma` column when built with `ENABLE_PLASMA=ON`, with `tile_size = problem_size` and `n_tiles = 1`, so its runtime files merge cleanly with the tiled benchmarks on the `problem_size` key:
 
 ```
 threads;problem_size;tile_size;n_tiles;lapacke;plasma
@@ -239,7 +239,7 @@ The same lines are also printed to stdout.
             └── adapter_cblas_fp64.cpp
 ```
 
-When `DISABLE_BLAS_REFERENCE=ON`, `adapter_cblas_fp64.cpp` and `validate.cpp` are still compiled and linked (they share cblas/lapacke symbols with PLASMA's BLAS dependency); only the runtime dispatch of the `lapacke` mode is skipped.
+When `ENABLE_LAPACKE=OFF`, `adapter_cblas_fp64.cpp` and `validate.cpp` are still compiled and linked (they share cblas/lapacke symbols with PLASMA's BLAS dependency); only the runtime dispatch of the `lapacke` mode is skipped.
 
 ## Contributing
 
