@@ -39,10 +39,8 @@ PLASMA 24.8.7's `plasma_desc_*_create()` routines compute their tile-storage siz
 
 The benchmark handles this transparently:
 
-- For sweep sizes `N` in `(65280, 65536]` the working size is **clamped to 65280** for the whole row (both `lapacke` and `plasma` run at 65280, and the `problem_size` column reports 65280). This keeps the largest practical PLASMA point on the curve without touching the underlying PLASMA build.
+- For sweep sizes `N` in `(65280, 65536]`, **only `plasma` is silently clamped down to 65280** for that iteration; `lapacke` runs at the full `N`. The `problem_size` column reports the original `N`, so `plasma`'s timing in this range corresponds to the 65280 compute even though the row is labelled with the input size.
 - For `N > 65536` `plasma` records `nan`. `lapacke` is unaffected by the int32 ceiling and continues normally.
-
-Patching `(size_t)` casts into `control/descriptor.c` in the spack PLASMA package removes the ceiling and the clamp + guard become no-ops.
 
 ## Dependencies
 
@@ -54,12 +52,12 @@ All three implementations are built with CMake (≥ 3.23) and C++20. The OpenMP 
 | OpenBLAS 0.3.28 (`threads=openmp`) | — | — | ✓ (default) |
 | Intel oneMKL (sequential) | optional (`ENABLE_MKL=ON`) | optional (`ENABLE_MKL=ON`) | — |
 | Intel oneMKL (`intel_thread`) | — | — | optional (`ENABLE_MKL=ON`) |
-| PLASMA | — | — | optional (`ENABLE_PLASMA=ON`) |
+| PLASMA 24.8.7 | — | — | optional (`ENABLE_PLASMA=ON`) |
 | HPX 1.11.0 + jemalloc | — | ✓ | — |
 | GCC 14.2.0 | ✓ | ✓ | ✓ |
 | LLVM/Clang 22.1.2 | optional | — | — |
 
-Dependencies are managed via [Spack](https://spack.io/). The compile scripts auto-detect the host system and load the correct Spack environment.
+Dependencies are managed via [Spack](https://spack.io/).
 
 ## Build
 

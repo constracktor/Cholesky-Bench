@@ -70,18 +70,8 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    for (std::size_t input_size = START_SIZE; input_size <= STOP_SIZE; input_size = input_size * STEP_SIZE)
+    for (std::size_t size = START_SIZE; size <= STOP_SIZE; size = size * STEP_SIZE)
     {
-        // PLASMA's triangular descriptor allocation overflows int32 for
-        // N>65280 with the default nb=256. For sweep sizes in (65280, 65536]
-        // we transparently clamp the working size down to 65280. Sizes beyond
-        // 65536 fall through and the per-mode catch handler records nan.
-        std::size_t size = input_size;
-        if (size > 65'280 && size <= 65'536)
-        {
-            size = 65'280;
-        }
-
         for (std::size_t l = 0; l < LOOP; l++)
         {
             std::string header = "threads;problem_size;tile_size;n_tiles";
@@ -102,17 +92,27 @@ int main(int argc, char *argv[])
             for (const auto &mode : modes)
             {
                 header += ";" + mode;
+                std::size_t mode_size = size;
 
-                std::vector<double> matrix = gen_matrix(size);
+                // PLASMA's triangular descriptor allocation
+                // overflows int32 for N>65280 with the default nb=256. For
+                // input sizes in (65280, 65536] we silently clamp PLASMA's
+                // working size down to 65280;                std::size_t mode_size = size;
+                if (mode == "plasma" && mode_size > 65'280 && mode_size <= 65'536)
+                {
+                    mode_size = 65'280;
+                }
+
+                std::vector<double> matrix = gen_matrix(mode_size);
                 // NaN guard
                 double cholesky_cpu = std::numeric_limits<double>::quiet_NaN();
                 try
                 {
-                    cholesky_cpu = cpu::cholesky(matrix, size, mode);
+                    cholesky_cpu = cpu::cholesky(matrix, mode_size, mode);
                 }
                 catch (const std::exception &e)
                 {
-                    std::cerr << "Error: variant '" << mode << "' failed at size=" << size << ": " << e.what()
+                    std::cerr << "Error: variant '" << mode << "' failed at size=" << mode_size << ": " << e.what()
                               << ". Recording NaN and continuing." << std::endl;
                     values += ";nan";
                     continue;
@@ -123,12 +123,13 @@ int main(int argc, char *argv[])
 #ifdef ENABLE_VALIDATION
                 // Validate by computing relative residual ||A - L L^T||_F / ||A||_F
                 constexpr double residual_tol = 1e-10;
-                const double residual = cpu::cholesky_residual(size, matrix);
-                std::cout << "[validate] mode=" << mode << " size=" << size << " residual=" << residual << std::endl;
+                const double residual = cpu::cholesky_residual(mode_size, matrix);
+                std::cout << "[validate] mode=" << mode << " size=" << mode_size << " residual=" << residual
+                          << std::endl;
                 if (!(residual <= residual_tol))  // catches NaN too
                 {
                     std::cerr << "Validation warning: variant '" << mode << "' residual " << residual
-                              << " exceeds tolerance " << residual_tol << " (size=" << size << ")" << std::endl;
+                              << " exceeds tolerance " << residual_tol << " (size=" << mode_size << ")" << std::endl;
                 }
 #endif
             }
