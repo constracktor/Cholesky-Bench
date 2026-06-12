@@ -11,7 +11,7 @@ using vector = std::vector<double>;
 
 /**
  * @brief FP64 In-place Cholesky decomposition of A using a threaded
- *        LAPACKE_dpotrf call.
+ *        LAPACKE_dpotrf2 call.
  *
  * @param A row-major matrix of size N*N to be factorized in place
  * @param N matrix dimension

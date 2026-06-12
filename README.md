@@ -30,7 +30,7 @@ Cholesky-Bench benchmarks right-looking tiled Cholesky factorization across a sp
 
 | Mode | Description |
 |------|-------------|
-| `lapacke` | Single threaded `LAPACKE_dpotrf` call on the full matrix; no tiling. Parallelism is delegated entirely to a threaded BLAS (OpenBLAS built with `threads=openmp`, or threaded Intel oneMKL via `ENABLE_MKL=ON`). Enabled by default; disable with `ENABLE_LAPACKE=OFF`. |
+| `lapacke` | Single threaded `LAPACKE_dpotrf2` call on the full matrix; no tiling. Parallelism is delegated entirely to a threaded BLAS (OpenBLAS built with `threads=openmp`, or threaded Intel oneMKL via `ENABLE_MKL=ON`). Enabled by default; disable with `ENABLE_LAPACKE=OFF`. |
 | `plasma` | Single `plasma_dpotrf` call on the full matrix (PLASMA's high-level synchronous API). PLASMA does its own tiled, OpenMP-task-based parallel Cholesky internally; tile size is left at PLASMA's built-in default. Built only when `ENABLE_PLASMA=ON`. |
 
 This directory is the natural baseline for the OpenMP and HPX tiled implementations: the `lapacke` mode isolates the contribution of vendor-provided dense-LA parallelism, and the `plasma` mode adds a tiled-parallel competitor that uses the same OpenMP runtime as the in-house variants.
