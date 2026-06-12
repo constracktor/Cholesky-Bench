@@ -1,20 +1,28 @@
 #include "cholesky_factor.hpp"
 
 #include "adapter_cblas_fp64.hpp"
+#include <cmath>
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/functional.hpp>
 #include <hpx/future.hpp>
+#include <iostream>
 
 namespace cpu
 {
+
+// Robust integer square root for exact squares
+inline std::size_t isqrt_exact(std::size_t x)
+{
+    return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
+}
 
 // Tiled Cholesky Algorithm
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles)
 {
     // Parameters
-    int N = std::sqrt(ft_tiles[0].get().size());
-    std::size_t n_tiles = std::sqrt(ft_tiles.size());
+    const int N = static_cast<int>(isqrt_exact(ft_tiles[0].get().size()));
+    const std::size_t n_tiles = isqrt_exact(ft_tiles.size());
     // Variants
     switch (variant)
     {
@@ -130,10 +138,10 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
 void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &tiles)
 {
     // Parameters
-    int N = std::sqrt(tiles[0].size());
-    std::size_t n_tiles = std::sqrt(tiles.size());
-    // The trailing-update outer loop has triangular work this
-    // parallel execution policy adds dynamic scheduling for the outer loops
+    const int N = static_cast<int>(isqrt_exact(tiles[0].size()));
+    const std::size_t n_tiles = isqrt_exact(tiles.size());
+    // The trailing-update outer loop has triangular work; this parallel
+    // execution policy adds dynamic scheduling for load balance.
     auto par_dyn = hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1));
 
     // Variants
@@ -244,8 +252,8 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
 void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_matrix &dep_tiles)
 {
     // Tile parameters
-    int N = static_cast<int>(std::sqrt(tiles[0].size()));
-    std::size_t n_tiles = std::sqrt(tiles.size());
+    const int N = static_cast<int>(isqrt_exact(tiles[0].size()));
+    const std::size_t n_tiles = isqrt_exact(tiles.size());
 
     for (std::size_t k = 0; k < n_tiles; k++)
     {
