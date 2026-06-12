@@ -19,7 +19,11 @@ vector f_potrf(vector_future f_A, const int N)
 #ifndef DISABLE_COMPUTATION
     // POTRF: in-place Cholesky decomposition of A
     // use dpotrf2 recursive version for better stability
-    LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
+    lapack_int info = LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
+    if (info != 0)
+    {
+        fprintf(stderr, "LAPACKE_dpotrf2 failed: info=%d (tile not positive definite)\n", (int) info);
+    }
 #else
     (void) N;
 #endif
@@ -135,7 +139,11 @@ void potrf(vector &A, const int N)
 #ifndef DISABLE_COMPUTATION
     // POTRF: in-place Cholesky decomposition of A
     // use dpotrf2 recursive version for better stability
-    LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
+    lapack_int info = LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
+    if (info != 0)
+    {
+        fprintf(stderr, "LAPACKE_dpotrf2 failed: info=%d (tile not positive definite)\n", (int) info);
+    }
 #else
     (void) A;
     (void) N;

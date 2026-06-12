@@ -9,4 +9,11 @@
 #include "lapacke.h"
 #endif
 
-void lapacke_potrf(vector &A, const int N) { LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N); }
+void lapacke_potrf(vector &A, const int N)
+{
+    lapack_int info = LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
+    if (info != 0)
+    {
+        fprintf(stderr, "LAPACKE_dpotrf2 failed: info=%d (matrix not positive definite)\n", (int) info);
+    }
+}
