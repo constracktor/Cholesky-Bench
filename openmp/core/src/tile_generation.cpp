@@ -17,7 +17,7 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
     std::size_t i_global, j_global;
     double random_value;
     // Create random generator
-    size_t seed = row * col;
+    size_t seed = row * n_tiles + col;
     std::mt19937 generator(seed);
     std::uniform_real_distribution<double> distribute(0, 1);
     // Preallocate required memory
@@ -55,17 +55,6 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
             }
         }
     }
-    // print tile
-    // std::cout << "(" << row << "," << col << ")\n";
-    // for (std::size_t i = 0; i < N; i++)
-    // {
-    //     for (std::size_t j = 0; j < N; j++)
-    //     {
-    //         std::cout << tile[i*N +j] << " ";
-    //     }
-    //     std::cout << "\n";
-    // }
-    // std::cout << "\n";
     return tile;
 #endif
 }
