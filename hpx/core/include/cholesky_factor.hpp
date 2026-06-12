@@ -13,7 +13,7 @@ namespace cpu
 {
 enum class Variant { async_future, sync_future, loop_one, loop_two, async_void };
 
-inline Variant to_variant(std::string s)
+inline Variant to_variant(const std::string &s)
 {
     if (s == "async_future")
     {

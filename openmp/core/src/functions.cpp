@@ -6,7 +6,7 @@
 namespace cpu
 {
 
-double cholesky(Tiled_vector_matrix &tiled_matrix, std::string variant)
+double cholesky(Tiled_vector_matrix &tiled_matrix, const std::string &variant)
 {
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////

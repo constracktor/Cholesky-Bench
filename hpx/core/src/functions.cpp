@@ -7,7 +7,7 @@
 namespace cpu
 {
 
-double cholesky_future(Tiled_future_matrix &tiled_matrix, std::string variant)
+double cholesky_future(Tiled_future_matrix &tiled_matrix, const std::string &variant)
 {
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
@@ -20,7 +20,7 @@ double cholesky_future(Tiled_future_matrix &tiled_matrix, std::string variant)
     return (stop - start).count() / 1e9;
 }
 
-double cholesky_loop(Tiled_vector_matrix &tiled_matrix, std::string variant)
+double cholesky_loop(Tiled_vector_matrix &tiled_matrix, const std::string &variant)
 {
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
