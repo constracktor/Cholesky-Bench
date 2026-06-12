@@ -94,10 +94,8 @@ int main(int argc, char *argv[])
                 header += ";" + mode;
                 std::size_t mode_size = size;
 
-                // PLASMA's triangular descriptor allocation
-                // overflows int32 for N>65280 with the default nb=256. For
-                // input sizes in (65280, 65536] we silently clamp PLASMA's
-                // working size down to 65280;                std::size_t mode_size = size;
+                // PLASMA's triangular descriptor allocation overflows int32 for
+                // N>65280 with the default nb=256. Clamp to 65280 for sizes in (65280, 65536].
                 if (mode == "plasma" && mode_size > 65'280 && mode_size <= 65'536)
                 {
                     mode_size = 65'280;

@@ -27,5 +27,4 @@ namespace cpu
 double cholesky_residual(std::size_t problem_size, std::size_t n_tiles, const Tiled_vector_matrix &L);
 
 }  // namespace cpu
-
 #endif  // end of CPU_VALIDATE_H

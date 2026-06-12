@@ -56,17 +56,6 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
             }
         }
     }
-    // print tile
-    // std::cout << "(" << row << "," << col << ")\n";
-    // for (std::size_t i = 0; i < N; i++)
-    // {
-    //     for (std::size_t j = 0; j < N; j++)
-    //     {
-    //         std::cout << tile[i*N +j] << " ";
-    //     }
-    //     std::cout << "\n";
-    // }
-    // std::cout << "\n";
     return tile;
 #endif
 }

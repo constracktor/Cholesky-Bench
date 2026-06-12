@@ -73,7 +73,6 @@ int main(int argc, char *argv[])
         {
             for (std::size_t l = 0; l < LOOP; l++)
             {
-                std::size_t tile_size = size / n_tiles;
                 // header for output file
                 std::string header = "threads;problem_size;tile_size;n_tiles";
                 // runtime config and values
@@ -82,8 +81,7 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(size / n_tiles);
                 values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
-                std::vector<std::string> modes = { "for_collapse", "for_naive", "task_naive", "task_depend" };
-                //,"task_prio" };
+                std::vector<std::string> modes = { "for_collapse", "for_naive", "task_naive", "task_depend", "task_prio" };
 
                 for (const auto &mode : modes)
                 {

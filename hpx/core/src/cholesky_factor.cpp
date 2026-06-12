@@ -284,7 +284,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
 
             for (std::size_t n = k + 1; n < m; n++)
             {
-                // SYRK: A[m,m] = A[m,m] - B[m,k] * B[m,k]^T
+                // GEMM: C[m,n] = C[m,n] - A[m,k] * B[n,k]^T
                 dep_tiles[m * n_tiles + n] = hpx::dataflow(
                     hpx::annotated_function(gemm_f, "cholesky_gemm"),
                     dep_tiles[m * n_tiles + k],  // dep on A

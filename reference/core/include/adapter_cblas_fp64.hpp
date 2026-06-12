@@ -17,5 +17,4 @@ using vector = std::vector<double>;
  * @param N matrix dimension
  */
 void lapacke_potrf(vector &A, const int N);
-
 #endif  // end of CPU_ADAPTER_CBLAS_FP64_H

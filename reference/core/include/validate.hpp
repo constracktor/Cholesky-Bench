@@ -24,5 +24,4 @@ namespace cpu
 double cholesky_residual(std::size_t N, const std::vector<double> &L);
 
 }  // namespace cpu
-
 #endif  // end of CPU_VALIDATE_H

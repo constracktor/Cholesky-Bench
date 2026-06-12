@@ -18,5 +18,4 @@
  * @return owning row-major buffer of length N*N
  */
 std::vector<double> gen_matrix(std::size_t N);
-
 #endif

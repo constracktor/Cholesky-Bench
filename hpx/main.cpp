@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     // cmdline arguments
     using namespace hpx::program_options;
     options_description opts;
-    opts.add_options()("loop", value<std::size_t>()->default_value(1), "Number of repititions")(
+    opts.add_options()("loop", value<std::size_t>()->default_value(1), "Number of repetitions")(
         "size_start", value<std::size_t>()->default_value(32), "Start problem size")(
         "size_stop", value<std::size_t>()->default_value(128), "Stop problem size")(
         "tiles_start", value<std::size_t>()->default_value(16), "Start tiles per dimension")(
@@ -55,7 +55,6 @@ int main(int argc, char *argv[])
         {
             for (std::size_t l = 0; l < LOOP; l++)
             {
-                std::size_t tile_size = size / n_tiles;
                 // header for output file
                 std::string header = "threads;problem_size;tile_size;n_tiles";
                 // runtime config and values

@@ -245,7 +245,6 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
 #pragma omp task depend(in : tile_kk) depend(inout : tile_mk) priority(trsm_prio)
                             {
                                 trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
-                                ;
                             }
                         }
 

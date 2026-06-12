@@ -41,7 +41,7 @@ inline Variant to_variant(std::string s)
 
 /**
  * @brief Right-looking tiled Cholesky using vector futures for dependency tracking.
- * @param variant      choose between asyc_future or sync_future
+ * @param variant      choose between async_future or sync_future
  * @param ft_tiles     futurized flat lower-triangular tile data (mutated in-place)
  */
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles);
