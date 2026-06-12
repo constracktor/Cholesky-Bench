@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
                 {
                     auto tiles = gen_tiled_matrix(size, n_tiles);
                     auto dep_tiles = gen_void_tiled_matrix(n_tiles);
-                    auto cholesky_cpu = cpu::cholesky_void(tiles, dep_tiles, n_tiles);
+                    auto cholesky_cpu = cpu::cholesky_void(tiles, dep_tiles);
 
                     header += ";async_void";
                     values += ";" + std::to_string(cholesky_cpu);
