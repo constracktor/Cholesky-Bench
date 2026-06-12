@@ -14,9 +14,9 @@ using Tiled_void_matrix = std::vector<hpx::shared_future<void>>;
  * @brief Generate a tile of a random symmetric positive-definite tiled matrix
  * @param row        row index of tile in tiled matrix
  * @param col        col index of tile in tiled matrix
- * @param N          total dimension of matrix (problem_size)
+ * @param N          tile size (number of rows/columns per tile)
  * @param n_tiles    tiles per dimension
- * @return Tiled matrix where lower triangle populated with filled vector
+ * @return Single tile as a row-major N×N vector
  */
 std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles);
 

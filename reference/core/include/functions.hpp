@@ -12,7 +12,7 @@ namespace cpu
 
 /**
  * @brief Time a single call to the requested reference variant
- *        ('reference' or 'plasma') on the @p matrix buffer (row-major, N x N).
+ *        ('lapacke' or 'plasma') on the @p matrix buffer (row-major, N x N).
  *        The buffer is factorized in place.
  *
  * @param matrix  row-major matrix; on return contains the lower-triangular factor L
