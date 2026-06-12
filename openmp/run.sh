@@ -52,7 +52,7 @@ export OMP_NUM_THREADS=128
 export OMP_PROC_BIND=close
 export OMP_PLACES=cores
 # Required for the task_prio variant (priority() is otherwise capped to 0).
-#export OMP_MAX_TASK_PRIORITY=16
+export OMP_MAX_TASK_PRIORITY=16
 
 echo "Running with $COMPILER runtime"
 
