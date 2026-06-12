@@ -1,4 +1,5 @@
 # Cholesky-Bench
+
 <img align="right" width="20%" src="/images/cholesky_bench_logo.jpeg">
 
 Cholesky-Bench benchmarks right-looking tiled Cholesky factorization across a spectrum of parallelization strategies, from classical fork-join to fully asynchronous task graphs, covering multiple parallelism models including state-of-the-art asynchronous many-task runtimes. Currently OpenMP and [HPX](https://github.com/TheHPXProject/hpx) are supported, each with five parallel implementations. A non-tiled parallel reference using LAPACKE and optionally [PLASMA](https://github.com/icl-utk-edu/plasma) is also included as a baseline.
@@ -250,5 +251,13 @@ We would be happy to expand Cholesky-Bench to additional asynchronous many-task 
 If you use Cholesky-Bench in your research, please cite:
 
 ```bibtex
-@misc{coming_soon}
+@misc{Strack2026_choleskybench,
+      title={From Fork-Join to Asynchronous Tasks: Parallelizing Tiled Cholesky Decomposition with OpenMP and HPX},
+      author={Alexander Strack and Alexander Van Craen and Dirk Pflüger},
+      year={2026},
+      eprint={2606.11937},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2606.11937},
+}
 ```
