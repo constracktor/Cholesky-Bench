@@ -1,0 +1,49 @@
+name: "CI: Reference"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-validate:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: spack/setup-spack@v2
+        with:
+          ref: releases/v0.23
+          buildcache: true
+          color: true
+
+      - name: Install dependencies
+        run: |
+          spack mirror add spack-public https://binaries.spack.io/releases/v0.23
+          spack compiler find
+          spack install --no-check-signature plasma ^openblas@0.3.28 threads=openmp
+
+      - name: Configure, build and validate
+        working-directory: reference
+        run: |
+          eval $(spack load --sh plasma ^openblas@0.3.28 threads=openmp)
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_VALIDATION=ON \
+            -DENABLE_PLASMA=ON
+          cmake --build build -j$(nproc)
+          OMP_NUM_THREADS=2 ./build/cholesky_reference \
+            --size_start 64 --size_stop 128 --loop 1 \
+            2>stderr.txt | tee stdout.txt
+          cat stderr.txt
+          if grep -q "Validation warning" stderr.txt; then
+            echo "FAILED: residual exceeds tolerance"
+            exit 1
+          fi
+          if ! grep -q "\[validate\]" stdout.txt; then
+            echo "FAILED: no validation output found (ENABLE_VALIDATION may not have taken effect)"
+            exit 1
+          fi
+          echo "All residuals within tolerance."
