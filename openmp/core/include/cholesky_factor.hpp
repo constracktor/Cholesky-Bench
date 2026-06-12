@@ -4,6 +4,7 @@
 #pragma once
 
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using Tiled_vector_matrix = std::vector<std::vector<double>>;
