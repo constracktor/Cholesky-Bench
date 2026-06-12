@@ -4,6 +4,9 @@
 #pragma once
 
 #include <hpx/future.hpp>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 using Tiled_vector_matrix = std::vector<std::vector<double>>;
 using Tiled_future_matrix = std::vector<hpx::shared_future<std::vector<double>>>;
