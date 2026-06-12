@@ -2,7 +2,7 @@
 
 #include "tile_generation.hpp"
 
-#ifdef GPRAT_ENABLE_MKL
+#ifdef ENABLE_MKL
 #include "mkl_cblas.h"
 #else
 #include "cblas.h"

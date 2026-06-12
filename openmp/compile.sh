@@ -4,12 +4,14 @@
 #
 # CMake project options can be overridden via environment variables
 # (defaults match the project's CMakeLists.txt defaults):
+#   ENABLE_MKL              ON|OFF  (default OFF) - link Intel oneMKL instead of OpenBLAS
 #   ENABLE_VALIDATION       ON|OFF  (default OFF) - residual check after each factorization
 #   DISABLE_COMPUTATION     ON|OFF  (default OFF) - replace BLAS/tile-gen with no-ops
 #   ENABLE_DYNAMIC_SCHEDULE ON|OFF  (default OFF) - schedule(dynamic,1) on trailing collapsed loop
 #
 # Examples:
 #   ./compile.sh gcc
+#   ENABLE_MKL=ON ./compile.sh gcc
 #   ENABLE_VALIDATION=ON ./compile.sh gcc
 #   ENABLE_DYNAMIC_SCHEDULE=ON ./compile.sh llvm
 #   DISABLE_COMPUTATION=ON ./compile.sh llvm
@@ -32,11 +34,12 @@ esac
 ################################################################################
 # CMake project options (env-var overridable; defaults match CMakeLists.txt)
 ################################################################################
+: "${ENABLE_MKL:=OFF}"
 : "${ENABLE_VALIDATION:=OFF}"
 : "${DISABLE_COMPUTATION:=OFF}"
 : "${ENABLE_DYNAMIC_SCHEDULE:=OFF}"
 
-for var in ENABLE_VALIDATION DISABLE_COMPUTATION ENABLE_DYNAMIC_SCHEDULE; do
+for var in ENABLE_MKL ENABLE_VALIDATION DISABLE_COMPUTATION ENABLE_DYNAMIC_SCHEDULE; do
   case "${!var}" in
   ON | OFF) ;;
   *)
@@ -102,11 +105,13 @@ fi
 rm -rf build && mkdir build && cd build
 
 echo "CMake options:"
+echo "  ENABLE_MKL              = $ENABLE_MKL"
 echo "  ENABLE_VALIDATION       = $ENABLE_VALIDATION"
 echo "  DISABLE_COMPUTATION     = $DISABLE_COMPUTATION"
 echo "  ENABLE_DYNAMIC_SCHEDULE = $ENABLE_DYNAMIC_SCHEDULE"
 
 cmake -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_MKL="$ENABLE_MKL" \
   -DENABLE_VALIDATION="$ENABLE_VALIDATION" \
   -DDISABLE_COMPUTATION="$DISABLE_COMPUTATION" \
   -DENABLE_DYNAMIC_SCHEDULE="$ENABLE_DYNAMIC_SCHEDULE" \

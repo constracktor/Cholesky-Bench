@@ -1,7 +1,7 @@
 #include "adapter_cblas_fp64.hpp"
 
 #ifndef DISABLE_COMPUTATION
-#ifdef GPRAT_ENABLE_MKL
+#ifdef ENABLE_MKL
 // MKL CBLAS and LAPACKE
 #include "mkl_cblas.h"
 #include "mkl_lapacke.h"

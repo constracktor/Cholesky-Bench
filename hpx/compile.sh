@@ -3,11 +3,13 @@
 #
 # CMake project options can be overridden via environment variables
 # (defaults match the project's CMakeLists.txt defaults):
+#   ENABLE_MKL          ON|OFF  (default OFF) - link Intel oneMKL instead of OpenBLAS
 #   ENABLE_VALIDATION   ON|OFF  (default OFF) - residual check after each factorization
 #   DISABLE_COMPUTATION ON|OFF  (default OFF) - replace BLAS/tile-gen with no-ops
 #
 # Examples:
 #   ./compile.sh
+#   ENABLE_MKL=ON ./compile.sh
 #   ENABLE_VALIDATION=ON ./compile.sh
 #   DISABLE_COMPUTATION=ON ./compile.sh
 ################################################################################
@@ -16,10 +18,11 @@ set -e # Exit immediately if a command exits with a non-zero status.
 ################################################################################
 # CMake project options (env-var overridable; defaults match CMakeLists.txt)
 ################################################################################
+: "${ENABLE_MKL:=OFF}"
 : "${ENABLE_VALIDATION:=OFF}"
 : "${DISABLE_COMPUTATION:=OFF}"
 
-for var in ENABLE_VALIDATION DISABLE_COMPUTATION; do
+for var in ENABLE_MKL ENABLE_VALIDATION DISABLE_COMPUTATION; do
   case "${!var}" in
   ON | OFF) ;;
   *)
@@ -68,10 +71,12 @@ fi
 rm -rf build && mkdir build && cd build
 
 echo "CMake options:"
+echo "  ENABLE_MKL          = $ENABLE_MKL"
 echo "  ENABLE_VALIDATION   = $ENABLE_VALIDATION"
 echo "  DISABLE_COMPUTATION = $DISABLE_COMPUTATION"
 
 cmake -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_MKL="$ENABLE_MKL" \
   -DENABLE_VALIDATION="$ENABLE_VALIDATION" \
   -DDISABLE_COMPUTATION="$DISABLE_COMPUTATION" \
   -DHPX_IGNORE_BOOST_COMPATIBILITY=ON ..
