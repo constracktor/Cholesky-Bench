@@ -31,7 +31,7 @@ jobs:
         run: |
           spack compiler find
           spack external find
-          spack install --no-check-signature hpx@1.11.0 malloc=jemalloc ^boost@1.86.0
+          spack install --no-check-signature hpx@1.11.0 malloc=jemalloc ^boost@1.86.0 ^hwloc@2.10.0
           spack install --no-check-signature openblas@0.3.28 threads=none
 
       - name: Push to binary cache
@@ -42,7 +42,7 @@ jobs:
       - name: Configure, build and validate
         working-directory: hpx
         run: |
-          eval $(spack load --sh hpx@1.11.0 malloc=jemalloc ^boost@1.86.0 openblas@0.3.28 threads=none)
+          eval $(spack load --sh hpx@1.11.0 malloc=jemalloc ^boost@1.86.0 ^hwloc@2.10.0 openblas@0.3.28 threads=none)
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_VALIDATION=ON \
