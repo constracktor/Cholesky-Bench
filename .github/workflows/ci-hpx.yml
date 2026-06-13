@@ -6,6 +6,12 @@ on:
 jobs:
   build-validate:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GITHUB_USER: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -16,16 +22,27 @@ jobs:
           packages_ref: v2025.11.0
           buildcache: true
 
+      - name: Add binary cache mirror
+        run: |
+          spack mirror add --oci-username-variable GITHUB_USER --oci-password-variable GITHUB_TOKEN \
+            ci-buildcache oci://ghcr.io/${{ github.repository_owner }}/cholesky-bench-buildcache-hpx
+
       - name: Install dependencies
         run: |
           spack compiler find
-          spack install --no-check-signature hpx@1.10.0 malloc=jemalloc ^boost@1.86.0
+          spack install --no-check-signature hpx@1.11.0 malloc=jemalloc ^boost@1.86.0
           spack install --no-check-signature openblas@0.3.28 threads=none
+
+      - name: Push to binary cache
+        if: ${{ !cancelled() }}
+        run: |
+          spack buildcache push --base-image ubuntu:24.04 --unsigned --update-index \
+            ci-buildcache $(spack find --format '/{hash}')
 
       - name: Configure, build and validate
         working-directory: hpx
         run: |
-          eval $(spack load --sh hpx@1.10.0 malloc=jemalloc ^boost@1.86.0 openblas@0.3.28 threads=none)
+          eval $(spack load --sh hpx@1.11.0 malloc=jemalloc ^boost@1.86.0 openblas@0.3.28 threads=none)
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_VALIDATION=ON \
