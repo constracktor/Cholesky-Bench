@@ -2,9 +2,6 @@ name: "CI: OpenMP"
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
 
 jobs:
   build-validate:
@@ -13,15 +10,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: spack/setup-spack@v2
+      - uses: spack/setup-spack@v3
         with:
-          ref: releases/v0.23
+          spack_ref: releases/v1.1
+          packages_ref: v2025.11.0
           buildcache: true
-          color: true
 
       - name: Install dependencies
         run: |
-          spack mirror add spack-public https://binaries.spack.io/releases/v0.23
           spack compiler find
           spack install --no-check-signature openblas@0.3.28 threads=none
 
