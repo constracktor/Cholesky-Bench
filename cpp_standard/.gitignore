@@ -1,0 +1,6 @@
+# Build artifacts
+build/
+*.o
+*.a
+logs/
+runtimes_*.txt

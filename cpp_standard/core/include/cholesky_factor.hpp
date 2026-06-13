@@ -1,0 +1,68 @@
+#ifndef CPU_CHOLESKY_FACTOR_H
+#define CPU_CHOLESKY_FACTOR_H
+
+#pragma once
+
+#include <future>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+using Tiled_vector_matrix = std::vector<std::vector<double>>;
+using Tiled_future_matrix = std::vector<std::shared_future<std::vector<double>>>;
+using Tiled_void_matrix = std::vector<std::shared_future<void>>;
+
+namespace cpu
+{
+enum class Variant { async_future, sync_future, loop_one, loop_two, async_void };
+
+inline Variant to_variant(const std::string &s)
+{
+    if (s == "async_future")
+    {
+        return Variant::async_future;
+    }
+    if (s == "sync_future")
+    {
+        return Variant::sync_future;
+    }
+    if (s == "loop_one")
+    {
+        return Variant::loop_one;
+    }
+    if (s == "loop_two")
+    {
+        return Variant::loop_two;
+    }
+    if (s == "async_void")
+    {
+        return Variant::async_void;
+    }
+
+    throw std::invalid_argument("Unknown Variant: " + std::string(s));
+}
+
+/**
+ * @brief Right-looking tiled Cholesky using std::shared_future<vector> for dependency tracking.
+ * @param variant      choose between async_future or sync_future
+ * @param ft_tiles     futurized flat lower-triangular tile data (mutated in-place)
+ */
+void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles);
+
+/**
+ * @brief Right-looking tiled Cholesky using fork-join (parallel std::for_each).
+ * @param variant   choose between loop_one and loop_two
+ * @param tiles     flat lower-triangular tile data (mutated in-place)
+ */
+void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &tiles);
+
+/**
+ * @brief Right-looking tiled Cholesky using std::shared_future<void> for dependency tracking.
+ *        Tile data lives in @p tiles (no copies); @p dep_tiles carries only completion signals.
+ * @param tiles     flat lower-triangular tile data (mutated in-place)
+ * @param dep_tiles matching void futures
+ */
+void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_matrix &dep_tiles);
+
+}  // end of namespace cpu
+#endif  // end of CPU_CHOLESKY_FACTOR_H
