@@ -110,8 +110,7 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
     {
         for (std::size_t j = 0; j <= i; j++)
         {
-            tiled_matrix[i * n_tiles + j] =
-                std::async(std::launch::async, &gen_tile, i, j, tile_size, n_tiles).share();
+            tiled_matrix[i * n_tiles + j] = std_backend::dataflow(&gen_tile, i, j, tile_size, n_tiles);
         }
     }
     // Synchronize

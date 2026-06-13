@@ -1,4 +1,5 @@
 #include "functions.hpp"
+#include "task_backend.hpp"
 #include "tile_generation.hpp"
 #ifdef ENABLE_VALIDATION
 #include "validate.hpp"
@@ -8,7 +9,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace
@@ -23,6 +23,7 @@ struct Options
     std::size_t size_stop = 128;
     std::size_t tiles_start = 16;
     std::size_t tiles_stop = 32;
+    std::size_t threads = 0;  // 0 => std::thread::hardware_concurrency()
 };
 
 [[noreturn]] void usage_and_exit(const char *prog, int code)
@@ -33,8 +34,9 @@ struct Options
               << "  --size_stop=N     Stop problem size (default 128)\n"
               << "  --tiles_start=N   Start tiles per dimension (default 16)\n"
               << "  --tiles_stop=N    Stop tiles per dimension (default 32)\n"
-              << "  --threads=N       Hint for parallel STL worker count (sets\n"
-              << "                    a TBB-recognised env var; best effort)\n";
+              << "  --threads=N       Worker-thread budget for the std::future task\n"
+              << "                    pool and the parallel-STL fork-join (default:\n"
+              << "                    hardware_concurrency). Mirrors --hpx:threads.\n";
     std::exit(code);
 }
 
@@ -107,11 +109,7 @@ Options parse_args(int argc, char *argv[])
         }
         else if (key == "threads")
         {
-            // The parallel std algorithms have no portable thread-count knob.
-            // Forward the hint to TBB (the libstdc++ par backend) if present.
-#if defined(__GLIBCXX__)
-            setenv("TBB_NUM_THREADS", val.c_str(), 1);
-#endif
+            opt.threads = parse_size(key, val, argv[0]);
         }
         else
         {
@@ -129,6 +127,9 @@ int main(int argc, char *argv[])
     ///////////////////////////////////////////////////////////////////////////
     // cmdline arguments
     const Options opt = parse_args(argc, argv);
+    // Size the std::future worker pool and the parallel-STL fork-join to the
+    // same thread budget, mirroring HPX's `--hpx:threads=N`.
+    std_backend::set_num_threads(opt.threads);
     ///////////////////////////////////////////////////////////////////////////
     // configuration
     const std::size_t LOOP = opt.loop;
@@ -156,7 +157,7 @@ int main(int argc, char *argv[])
     std::ofstream runtime_file;
     runtime_file.open(runtime_file_path, std::ios_base::app);
 
-    const unsigned int num_threads = std::thread::hardware_concurrency();
+    const std::size_t num_threads = std_backend::resolve_threads();
 
     for (std::size_t n_tiles = START_TILES; n_tiles <= STOP_TILES; n_tiles = n_tiles * STEP_TILES)
     {
