@@ -30,6 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           spack compiler find
+          spack external find
           spack install --no-check-signature hpx@1.11.0 malloc=jemalloc ^boost@1.86.0
           spack install --no-check-signature openblas@0.3.28 threads=none
 

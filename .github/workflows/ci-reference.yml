@@ -30,6 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           spack compiler find
+          spack external find
           spack install --no-check-signature plasma ^openblas@0.3.28 threads=openmp
 
       - name: Push to binary cache
