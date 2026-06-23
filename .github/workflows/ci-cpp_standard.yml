@@ -7,22 +7,38 @@ on:
 jobs:
   build-validate:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GITHUB_USER: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: spack/setup-spack@v2
+      - uses: spack/setup-spack@v3
         with:
-          ref: releases/v0.23
+          spack_ref: releases/v1.1
+          packages_ref: v2025.11.0
           buildcache: true
-          color: true
+
+      - name: Add binary cache mirror
+        run: |
+          spack mirror add --oci-username-variable GITHUB_USER --oci-password-variable GITHUB_TOKEN \
+            ci-buildcache oci://ghcr.io/${{ github.repository_owner }}/cholesky-bench-buildcache-cpp_standard
 
       - name: Install dependencies
         run: |
-          spack mirror add spack-public https://binaries.spack.io/releases/v0.23
           spack compiler find
+          spack external find
           spack install --no-check-signature openblas@0.3.28 threads=none
           spack install --no-check-signature intel-tbb
+
+      - name: Push to binary cache
+        run: |
+          spack buildcache push --base-image ubuntu:24.04 --unsigned --update-index \
+            ci-buildcache openblas intel-tbb
 
       - name: Configure, build and validate
         working-directory: cpp_standard
