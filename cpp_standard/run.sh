@@ -25,7 +25,6 @@ SCRIPT_DIR="$(pwd)"
 
 # Run executable
 srun --cpu-bind=cores "$SCRIPT_DIR/build/cholesky_std" \
-  --threads=128 \
   --loop=20 \
   --size_start=65536 \
   --size_stop=65536 \

@@ -33,7 +33,6 @@ jobs:
             -DENABLE_VALIDATION=ON
           cmake --build build -j$(nproc)
           ./build/cholesky_std \
-            --threads 2 \
             --size_start 64 --size_stop 64 \
             --tiles_start 2 --tiles_stop 4 --loop 1 \
             2>stderr.txt | tee stdout.txt

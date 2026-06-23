@@ -1,0 +1,13 @@
+[validate] mode=async_future size=64 n_tiles=2 residual=1.67212e-16
+[validate] mode=sync_future size=64 n_tiles=2 residual=1.67212e-16
+[validate] mode=loop_one size=64 n_tiles=2 residual=1.67212e-16
+[validate] mode=loop_two size=64 n_tiles=2 residual=1.67212e-16
+[validate] mode=async_void size=64 n_tiles=2 residual=1.67212e-16
+problem_size;tile_size;n_tiles;async_future;sync_future;loop_one;loop_two;async_void
+64;32;2;0.002977;0.001028;0.000106;0.000062;0.002087
+[validate] mode=async_future size=64 n_tiles=4 residual=1.78232e-16
+[validate] mode=sync_future size=64 n_tiles=4 residual=1.78232e-16
+[validate] mode=loop_one size=64 n_tiles=4 residual=1.78232e-16
+[validate] mode=loop_two size=64 n_tiles=4 residual=1.78232e-16
+[validate] mode=async_void size=64 n_tiles=4 residual=1.78232e-16
+64;16;4;0.002506;0.002552;0.000167;0.000243;0.002226

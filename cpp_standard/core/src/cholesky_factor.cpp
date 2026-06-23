@@ -34,19 +34,13 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 {
                     // TRSM:  Solve X * L^T = A
                     ft_tiles[m * n_tiles + k] = std_backend::dataflow(
-                        f_trsm,
-                        ft_tiles[k * n_tiles + k],
-                        ft_tiles[m * n_tiles + k],
-                        N,
-                        N,
-                        Blas_trans,
-                        Blas_right);
+                        f_trsm, ft_tiles[k * n_tiles + k], ft_tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                 }
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // SYRK:  A = A - B * B^T
-                    ft_tiles[m * n_tiles + m] = std_backend::dataflow(
-                        f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
+                    ft_tiles[m * n_tiles + m] =
+                        std_backend::dataflow(f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
                     for (std::size_t n = k + 1; n < m; n++)
                     {
                         // GEMM: C = C - A * B^T
@@ -77,13 +71,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 {
                     // TRSM:  Solve X * L^T = A
                     ft_tiles[m * n_tiles + k] = std_backend::dataflow(
-                        f_trsm,
-                        ft_tiles[k * n_tiles + k],
-                        ft_tiles[m * n_tiles + k],
-                        N,
-                        N,
-                        Blas_trans,
-                        Blas_right);
+                        f_trsm, ft_tiles[k * n_tiles + k], ft_tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                 }
                 // Synchronize
                 for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -94,8 +82,8 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // SYRK:  A = A - B * B^T
-                    ft_tiles[m * n_tiles + m] = std_backend::dataflow(
-                        f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
+                    ft_tiles[m * n_tiles + m] =
+                        std_backend::dataflow(f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
                     for (std::size_t n = k + 1; n < m; n++)
                     {
                         // GEMM: C = C - A * B^T

@@ -23,7 +23,6 @@ struct Options
     std::size_t size_stop = 128;
     std::size_t tiles_start = 16;
     std::size_t tiles_stop = 32;
-    std::size_t threads = 0;  // 0 => std::thread::hardware_concurrency()
 };
 
 [[noreturn]] void usage_and_exit(const char *prog, int code)
@@ -33,10 +32,7 @@ struct Options
               << "  --size_start=N    Start problem size (default 32)\n"
               << "  --size_stop=N     Stop problem size (default 128)\n"
               << "  --tiles_start=N   Start tiles per dimension (default 16)\n"
-              << "  --tiles_stop=N    Stop tiles per dimension (default 32)\n"
-              << "  --threads=N       Worker-thread budget for the std::future task\n"
-              << "                    pool and the parallel-STL fork-join (default:\n"
-              << "                    hardware_concurrency). Mirrors --hpx:threads.\n";
+              << "  --tiles_stop=N    Stop tiles per dimension (default 32)\n";
     std::exit(code);
 }
 
@@ -107,10 +103,6 @@ Options parse_args(int argc, char *argv[])
         {
             opt.tiles_stop = parse_size(key, val, argv[0]);
         }
-        else if (key == "threads")
-        {
-            opt.threads = parse_size(key, val, argv[0]);
-        }
         else
         {
             std::cerr << "Unknown option: --" << key << "\n";
@@ -127,9 +119,6 @@ int main(int argc, char *argv[])
     ///////////////////////////////////////////////////////////////////////////
     // cmdline arguments
     const Options opt = parse_args(argc, argv);
-    // Size the std::future worker pool and the parallel-STL fork-join to the
-    // same thread budget, mirroring HPX's `--hpx:threads=N`.
-    std_backend::set_num_threads(opt.threads);
     ///////////////////////////////////////////////////////////////////////////
     // configuration
     const std::size_t LOOP = opt.loop;
@@ -157,8 +146,6 @@ int main(int argc, char *argv[])
     std::ofstream runtime_file;
     runtime_file.open(runtime_file_path, std::ios_base::app);
 
-    const std::size_t num_threads = std_backend::resolve_threads();
-
     for (std::size_t n_tiles = START_TILES; n_tiles <= STOP_TILES; n_tiles = n_tiles * STEP_TILES)
     {
         for (std::size_t size = START_SIZE; size <= STOP_SIZE; size = size * STEP_SIZE)
@@ -166,10 +153,9 @@ int main(int argc, char *argv[])
             for (std::size_t l = 0; l < LOOP; l++)
             {
                 // header for output file
-                std::string header = "threads;problem_size;tile_size;n_tiles";
+                std::string header = "problem_size;tile_size;n_tiles";
                 // runtime config and values
-                std::string values = std::to_string(num_threads);
-                values += std::string(";") + std::to_string(size);
+                std::string values = std::to_string(size);
                 values += std::string(";") + std::to_string(size / n_tiles);
                 values += std::string(";") + std::to_string(n_tiles);
 #ifdef ENABLE_VALIDATION
