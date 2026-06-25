@@ -1,0 +1,71 @@
+name: "CI: TTG"
+
+on:
+  push:
+
+jobs:
+  build-validate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GITHUB_USER: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: spack/setup-spack@v3
+        with:
+          spack_ref: releases/v1.1
+          packages_ref: v2025.11.0
+          buildcache: true
+
+      - name: Add binary cache mirror
+        run: |
+          spack mirror add --oci-username-variable GITHUB_USER --oci-password-variable GITHUB_TOKEN \
+            ci-buildcache oci://ghcr.io/${{ github.repository_owner }}/cholesky-bench-buildcache-ttg
+
+      - name: Install dependencies
+        run: |
+          spack compiler find
+          spack external find
+          # TTG is built from source by the project's CMake (FetchContent).
+          # TTG v1.0.0 requires its own internal PaRSEC fork (devreal/parsec-1),
+          # so we do NOT install spack parsec — TTG fetches and builds it itself.
+          # openmpi and boost are provided so PaRSEC/MADNESS do not fetch them.
+          spack install --no-check-signature openmpi
+          spack install --no-check-signature boost@1.86.0 +serialization
+          spack install --no-check-signature openblas@0.3.28 threads=none
+
+      - name: Push to binary cache
+        run: |
+          spack buildcache push --base-image ubuntu:24.04 --unsigned --update-index \
+            ci-buildcache openmpi boost+serialization openblas
+
+      - name: Configure, build and validate
+        working-directory: ttg
+        run: |
+          eval $(spack load --sh openmpi boost@1.86.0+serialization openblas@0.3.28 threads=none)
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_VALIDATION=ON \
+            -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=ON \
+            -DBUILD_TESTING=OFF
+          cmake --build build -j$(nproc)
+          ./build/cholesky_ttg \
+            --threads 2 \
+            --size_start 64 --size_stop 64 \
+            --tiles_start 2 --tiles_stop 4 --loop 1 \
+            2>stderr.txt | tee stdout.txt
+          cat stderr.txt
+          if grep -q "Validation warning" stderr.txt; then
+            echo "FAILED: residual exceeds tolerance"
+            exit 1
+          fi
+          if ! grep -q "\[validate\]" stdout.txt; then
+            echo "FAILED: no validation output found (ENABLE_VALIDATION may not have taken effect)"
+            exit 1
+          fi
+          echo "All residuals within tolerance."
