@@ -10,16 +10,27 @@
 #include "validate.hpp"
 #endif
 
+#include <hwloc.h>
+
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <thread>
 #include <ttg.h>
 #include <vector>
 
 namespace
 {
+std::size_t physical_core_count()
+{
+    hwloc_topology_t topo;
+    hwloc_topology_init(&topo);
+    hwloc_topology_load(topo);
+    int cores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+    hwloc_topology_destroy(topo);
+    return (cores > 0) ? static_cast<std::size_t>(cores) : 1;
+}
+
 // Minimal "--name value" command-line lookup (TTG has no program_options).
 std::size_t arg_value(int argc, char **argv, const std::string &name, std::size_t fallback)
 {
@@ -62,13 +73,56 @@ int main(int argc, char *argv[])
 
     const long nthreads = arg_threads(argc, argv);
 
+    // Strip all custom args before passing argv to TTG's parser.
+    static const std::vector<std::string> own_args = {
+        "--threads", "--loop", "--size_start", "--size_stop", "--tiles_start", "--tiles_stop"};
+    for (int i = 1; i + 1 < argc;)
+    {
+        bool matched = false;
+        for (const auto &name : own_args)
+        {
+            if (name == argv[i])
+            {
+                for (int j = i; j + 2 < argc; ++j)
+                    argv[j] = argv[j + 2];
+                argc -= 2;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched)
+            ++i;
+    }
+
     ///////////////////////////////////////////////////////////////////////////
-    // Start the TTG runtime
-    ttg::initialize(argc, argv, static_cast<int>(nthreads));
+    // Inject PaRSEC MCA options for physical-core-only thread binding.
+    // PaRSEC already defaults to parsec_hwloc_nb_real_cores() when nb_cores<=0,
+    // but binding must be opted in explicitly.
+    static const char *bind_key = "--mca";
+    static const char *bind_val = "bind_threads";
+    static const char *bind_on  = "1";
+    bool has_bind = false;
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::string("--mca") == argv[i] && std::string("bind_threads") == argv[i + 1])
+            has_bind = true;
+
+    std::vector<const char *> new_argv;
+    new_argv.reserve(static_cast<std::size_t>(argc) + 3);
+    for (int i = 0; i < argc; ++i)
+        new_argv.push_back(argv[i]);
+    if (!has_bind)
+    {
+        new_argv.push_back(bind_key);
+        new_argv.push_back(bind_val);
+        new_argv.push_back(bind_on);
+    }
+    int new_argc = static_cast<int>(new_argv.size());
+
+    ttg::initialize(new_argc, const_cast<char **>(new_argv.data()), static_cast<int>(nthreads));
     const bool is_root = (ttg::default_execution_context().rank() == 0);
 
     const std::size_t reported_threads =
-        (nthreads > 0) ? static_cast<std::size_t>(nthreads) : std::thread::hardware_concurrency();
+        (nthreads > 0) ? static_cast<std::size_t>(nthreads) : physical_core_count();
 
     // print and write results
     bool HEADER_FLAG = true;

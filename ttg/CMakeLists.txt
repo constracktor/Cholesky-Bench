@@ -83,8 +83,15 @@ if(BUILD_CORE)
   # Add the executable
   add_executable(cholesky_ttg main.cpp)
 
+  # hwloc is used to query physical core count (PaRSEC already requires it).
+  # Use pkg-config since FindHWLOC.cmake lives inside PaRSEC's FetchContent tree
+  # and does not propagate to our scope.
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(HWLOC REQUIRED hwloc)
+
   # Link the libraries
-  target_link_libraries(cholesky_ttg PUBLIC Cholesky::core ttg-parsec)
+  target_link_libraries(cholesky_ttg PUBLIC Cholesky::core ttg-parsec ${HWLOC_LINK_LIBRARIES})
+  target_include_directories(cholesky_ttg PRIVATE ${HWLOC_INCLUDE_DIRS})
   target_compile_definitions(cholesky_ttg PRIVATE TTG_USE_PARSEC=1)
 
   if(ENABLE_VALIDATION)

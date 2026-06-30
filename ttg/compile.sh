@@ -50,13 +50,15 @@ if command -v spack &>/dev/null; then
     module load gcc/14.2.0
     export CC=gcc
     export CXX=g++
-    spack load ttg%gcc@14.2.0
-    spack load openblas@0.3.28%gcc@14.2.0 threads=none
+    spack load --first openmpi%gcc@14.2.0
+    spack load --first boost@1.86.0%gcc@14.2.0 +serialization
+    spack load --first openblas@0.3.28%gcc@14.2.0 threads=none
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
     module load gcc/14.2.0
-    spack load ttg%gcc@14.2.0 arch=linux-almalinux9-zen3
-    spack load openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=none
+    spack load --first openmpi%gcc@14.2.0 arch=linux-almalinux9-zen3
+    spack load --first boost@1.86.0%gcc@14.2.0 +serialization arch=linux-almalinux9-zen3
+    spack load --first openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=none
 
   else
     echo "Hostname is $HOSTNAME — no action taken."
@@ -86,9 +88,9 @@ cd ..
 
 # Example
 # ./build/cholesky_ttg \
-# --threads=128 \
-# --loop=1 \
-# --size_start=65536 \
-# --size_stop=65536 \
-# --tiles_start=64 \
-# --tiles_stop=64
+# --threads 128 \
+# --loop 1 \
+# --size_start 65536 \
+# --size_stop 65536 \
+# --tiles_start 64 \
+# --tiles_stop 64
