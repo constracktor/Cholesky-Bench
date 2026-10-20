@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
                 };
 #endif
                 ///////////////////////////////////////////////////////////////////////////
-                // TTG dataflow
+                // TTG dataflow (asynchronous)
                 {
                     auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
                     auto cholesky_cpu = cpu::cholesky_flow(tiled_matrix);
@@ -184,6 +184,23 @@ int main(int argc, char *argv[])
                     if (is_root)
                     {
                         report_residual("flow", residual);
+                    }
+#endif
+                }
+                ///////////////////////////////////////////////////////////////////////////
+                // TTG tasks with a fence after each phase
+                {
+                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
+                    auto cholesky_cpu = cpu::cholesky_flow_sync(tiled_matrix);
+
+                    header += ";flow_sync";
+                    values += ";" + std::to_string(cholesky_cpu);
+
+#ifdef ENABLE_VALIDATION
+                    double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
+                    if (is_root)
+                    {
+                        report_residual("flow_sync", residual);
                     }
 #endif
                 }

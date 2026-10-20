@@ -363,4 +363,145 @@ double right_looking_cholesky_tiled_ttg(Tiled_vector_matrix &tiles)
     return (stop - start).count() / 1e9;
 }
 
+namespace
+{
+
+///////////////////////////////////////////////////////////////////////////////
+// Barrier-synchronized variant: edge-less tasks that read and write the shared
+// tile storage directly. Dependencies are enforced by the caller, which runs
+// one phase (all tasks of POTRF, TRSM or the trailing update) at a time and
+// fences in between.
+///////////////////////////////////////////////////////////////////////////////
+auto make_potrf_sync(TiledMatrix &A)
+{
+    const int N = A.tile_size();
+    const std::size_t nt = A.rows();
+    auto f = [&A, N, nt](const Key1 &key, std::tuple<> &out)
+    {
+        (void) out;
+        potrf((*A.store)[key[0] * nt + key[0]], N);
+    };
+    return ttg::make_tt<Key1>(f, ttg::edges(), ttg::edges(), "POTRF sync");
+}
+
+auto make_trsm_sync(TiledMatrix &A)
+{
+    const int N = A.tile_size();
+    const std::size_t nt = A.rows();
+    auto f = [&A, N, nt](const Key2 &key, std::tuple<> &out)
+    {
+        (void) out;
+        const std::size_t M = key[0];
+        const std::size_t K = key[1];
+        trsm((*A.store)[K * nt + K], (*A.store)[M * nt + K], N, N, Blas_trans, Blas_right);
+    };
+    return ttg::make_tt<Key2>(f, ttg::edges(), ttg::edges(), "TRSM sync");
+}
+
+auto make_syrk_sync(TiledMatrix &A)
+{
+    const int N = A.tile_size();
+    const std::size_t nt = A.rows();
+    auto f = [&A, N, nt](const Key2 &key, std::tuple<> &out)
+    {
+        (void) out;
+        const std::size_t M = key[0];
+        const std::size_t K = key[1];
+        syrk((*A.store)[M * nt + M], (*A.store)[M * nt + K], N);
+    };
+    return ttg::make_tt<Key2>(f, ttg::edges(), ttg::edges(), "SYRK sync");
+}
+
+auto make_gemm_sync(TiledMatrix &A)
+{
+    const int N = A.tile_size();
+    const std::size_t nt = A.rows();
+    auto f = [&A, N, nt](const Key3 &key, std::tuple<> &out)
+    {
+        (void) out;
+        const std::size_t M = key[0];
+        const std::size_t Ncol = key[1];
+        const std::size_t K = key[2];
+        gemm((*A.store)[M * nt + K],
+             (*A.store)[Ncol * nt + K],
+             (*A.store)[M * nt + Ncol],
+             N,
+             N,
+             N,
+             Blas_no_trans,
+             Blas_trans);
+    };
+    return ttg::make_tt<Key3>(f, ttg::edges(), ttg::edges(), "GEMM sync");
+}
+
+}  // namespace
+
+double right_looking_cholesky_tiled_ttg_sync(Tiled_vector_matrix &tiles)
+{
+    const std::size_t n_tiles = isqrt_exact(tiles.size());
+    const int nb = static_cast<int>(isqrt_exact(tiles[0].size()));
+
+    TiledMatrix A{ n_tiles, nb, &tiles };
+
+    auto op_potrf = make_potrf_sync(A);
+    auto op_trsm = make_trsm_sync(A);
+    auto op_syrk = make_syrk_sync(A);
+    auto op_gemm = make_gemm_sync(A);
+
+    for (auto *op : { static_cast<ttg::TTBase *>(op_potrf.get()),
+                      static_cast<ttg::TTBase *>(op_trsm.get()),
+                      static_cast<ttg::TTBase *>(op_syrk.get()),
+                      static_cast<ttg::TTBase *>(op_gemm.get()) })
+    {
+        const bool connected = ttg::make_graph_executable(op);
+        assert(connected);
+        (void) connected;
+    }
+
+    // Time the execution only (graph construction above is excluded), as in the
+    // asynchronous variant.
+    auto start = std::chrono::high_resolution_clock::now();
+    ttg::execute();
+    const bool root = (ttg::default_execution_context().rank() == 0);
+    for (std::size_t k = 0; k < n_tiles; k++)
+    {
+        // POTRF: Compute Cholesky factor L
+        if (root)
+        {
+            op_potrf->invoke(Key1{ k });
+        }
+        // Synchronize
+        ttg::fence();
+
+        // TRSM:  Solve X * L^T = A
+        if (root)
+        {
+            for (std::size_t m = k + 1; m < n_tiles; m++)
+            {
+                op_trsm->invoke(Key2{ m, k });
+            }
+        }
+        // Synchronize
+        ttg::fence();
+
+        if (root)
+        {
+            for (std::size_t m = k + 1; m < n_tiles; m++)
+            {
+                // SYRK:  A = A - B * B^T
+                op_syrk->invoke(Key2{ m, k });
+                for (std::size_t n = k + 1; n < m; n++)
+                {
+                    // GEMM: C = C - A * B^T
+                    op_gemm->invoke(Key3{ m, n, k });
+                }
+            }
+        }
+        // Synchronize
+        ttg::fence();
+    }
+    auto stop = std::chrono::high_resolution_clock::now();
+    return (stop - start).count() / 1e9;
+}
+
 }  // end of namespace cpu

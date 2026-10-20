@@ -25,4 +25,9 @@ double cholesky_flow(Tiled_vector_matrix &tiled_matrix)
     return right_looking_cholesky_tiled_ttg(tiled_matrix);
 }
 
+double cholesky_flow_sync(Tiled_vector_matrix &tiled_matrix)
+{
+    return right_looking_cholesky_tiled_ttg_sync(tiled_matrix);
+}
+
 }  // end of namespace cpu

@@ -24,5 +24,12 @@ namespace cpu
  */
 double cholesky_flow(Tiled_vector_matrix &tiled_matrix);
 
+/**
+ * @brief Run the barrier-synchronized TTG Cholesky variant and return wall-clock time in seconds.
+ * @param tiled_matrix     flat lower-triangular tile data (mutated in-place)
+ * @return elapsed time in seconds
+ */
+double cholesky_flow_sync(Tiled_vector_matrix &tiled_matrix);
+
 }  // namespace cpu
 #endif  // end of CPU_FUNCTIONS_H

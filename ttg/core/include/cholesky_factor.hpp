@@ -33,5 +33,17 @@ namespace cpu
  */
 double right_looking_cholesky_tiled_ttg(Tiled_vector_matrix &tiles);
 
+/**
+ * @brief Barrier-synchronized right-looking tiled Cholesky on TTG.
+ *
+ * Edge-less TTG tasks operate directly on the shared tile storage. Each step runs the POTRF, TRSM and
+ * SYRK/GEMM phases one after another with a ttg::fence() after each phase, mirroring the HPX sync_future variant.
+ * Only the execution (invoke -> fence) is timed; task construction is excluded.
+ *
+ * @param tiles  flat lower-triangular tile data (mutated in-place)
+ * @return elapsed factorization time in seconds
+ */
+double right_looking_cholesky_tiled_ttg_sync(Tiled_vector_matrix &tiles);
+
 }  // end of namespace cpu
 #endif  // end of CPU_CHOLESKY_FACTOR_H
