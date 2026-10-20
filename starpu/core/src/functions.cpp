@@ -14,7 +14,7 @@
 namespace cpu
 {
 
-double cholesky_stf(Tiled_vector_matrix &tiled_matrix)
+double cholesky_stf(Tiled_vector_matrix &tiled_matrix, bool synchronize)
 {
     const std::size_t n_tiles = static_cast<std::size_t>(std::sqrt(static_cast<double>(tiled_matrix.size())) + 0.5);
     Tile_handles handles(n_tiles * n_tiles, nullptr);
@@ -23,7 +23,7 @@ double cholesky_stf(Tiled_vector_matrix &tiled_matrix)
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
     // Launch Cholesky decomposition: K = L * L^T
-    submit_right_looking_cholesky(handles, n_tiles);
+    submit_right_looking_cholesky(handles, n_tiles, synchronize);
     // Synchronize: wait for all submitted tasks
     starpu_task_wait_for_all();
     ///////////////////////////////////////////////////////////////////////////

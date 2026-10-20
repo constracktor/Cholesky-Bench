@@ -21,9 +21,10 @@ namespace cpu
  *        Tile registration and unregistration are excluded from the measured time.
  *        starpu_init() must have been called by the caller.
  * @param tiled_matrix     flat lower-triangular tile data (mutated in-place)
+ * @param synchronize      barrier after each phase (POTRF, TRSM, SYRK/GEMM) of every step
  * @return elapsed time in seconds
  */
-double cholesky_stf(Tiled_vector_matrix &tiled_matrix);
+double cholesky_stf(Tiled_vector_matrix &tiled_matrix, bool synchronize = false);
 
 }  // namespace cpu
 #endif  // end of CPU_FUNCTIONS_H

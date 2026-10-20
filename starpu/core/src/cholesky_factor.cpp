@@ -141,7 +141,7 @@ void register_tiles(Tiled_vector_matrix &tiles, Tile_handles &handles)
     }
 }
 
-void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
+void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, bool synchronize)
 {
     Codelets &cl = codelets();
     for (std::size_t k = 0; k < n_tiles; k++)
@@ -149,6 +149,10 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
         // POTRF: Compute Cholesky factor L
         STARPU_CHECK_RETURN_VALUE(
             starpu_task_insert(&cl.potrf, STARPU_RW, handles[k * n_tiles + k], 0), "starpu_task_insert");
+        if (synchronize)
+        {
+            starpu_task_wait_for_all();
+        }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
@@ -157,6 +161,10 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
                 starpu_task_insert(
                     &cl.trsm, STARPU_R, handles[k * n_tiles + k], STARPU_RW, handles[m * n_tiles + k], 0),
                 "starpu_task_insert");
+        }
+        if (synchronize)
+        {
+            starpu_task_wait_for_all();
         }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -182,6 +190,10 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
                         0),
                     "starpu_task_insert");
             }
+        }
+        if (synchronize)
+        {
+            starpu_task_wait_for_all();
         }
     }
 }

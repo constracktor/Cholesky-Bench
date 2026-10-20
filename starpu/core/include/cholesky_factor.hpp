@@ -29,11 +29,13 @@ void register_tiles(Tiled_vector_matrix &tiles, Tile_handles &handles);
 
 /**
  * @brief Submit the right-looking tiled Cholesky as a StarPU sequential task flow.
- *        Dependencies are inferred by StarPU from the access modes; this call does not wait for completion.
- * @param handles tile handles from register_tiles
- * @param n_tiles tiles per dimension
+ *        Dependencies are inferred by StarPU from the access modes. Without synchronization this call does not
+ *        wait for completion; with it, all tasks are awaited after the POTRF, TRSM and SYRK/GEMM phases of each step.
+ * @param handles     tile handles from register_tiles
+ * @param n_tiles     tiles per dimension
+ * @param synchronize insert a barrier after each phase of every step
  */
-void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles);
+void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, bool synchronize = false);
 
 /**
  * @brief Unregister the lower-triangle tile handles (waits for pending tasks on them).

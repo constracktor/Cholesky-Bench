@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
                 };
 #endif
                 ///////////////////////////////////////////////////////////////////////////
-                // StarPU sequential task flow
+                // StarPU sequential task flow (asynchronous)
                 {
                     auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
                     auto cholesky_cpu = cpu::cholesky_stf(tiled_matrix);
@@ -139,6 +139,20 @@ int main(int argc, char *argv[])
 #ifdef ENABLE_VALIDATION
                     double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
                     report_residual("stf", residual);
+#endif
+                }
+                ///////////////////////////////////////////////////////////////////////////
+                // StarPU sequential task flow with a barrier after each phase
+                {
+                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
+                    auto cholesky_cpu = cpu::cholesky_stf(tiled_matrix, true);
+
+                    header += ";stf_sync";
+                    values += ";" + std::to_string(cholesky_cpu);
+
+#ifdef ENABLE_VALIDATION
+                    double residual = cpu::cholesky_residual(size, n_tiles, tiled_matrix);
+                    report_residual("stf_sync", residual);
 #endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
