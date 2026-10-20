@@ -56,7 +56,7 @@ if command -v spack &>/dev/null; then
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
     module load gcc/14.2.0
-    spack load --first openmpi%gcc@14.2.0 arch=linux-almalinux9-zen3
+    spack load --first openmpi%gcc@14.2.0 arch=linux-almalinux9-zen2
     spack load --first boost@1.86.0%gcc@14.2.0 +serialization arch=linux-almalinux9-zen3
     spack load --first openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=none
 
