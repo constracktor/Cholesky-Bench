@@ -1,0 +1,64 @@
+name: "CI: StarPU"
+
+on:
+  push:
+
+jobs:
+  build-validate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GITHUB_USER: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: spack/setup-spack@v3
+        with:
+          spack_ref: releases/v1.1
+          packages_ref: v2025.11.0
+          buildcache: true
+
+      - name: Add binary cache mirror
+        run: |
+          spack mirror add --oci-username-variable GITHUB_USER --oci-password-variable GITHUB_TOKEN \
+            ci-buildcache oci://ghcr.io/${{ github.repository_owner }}/cholesky-bench-buildcache-starpu
+
+      - name: Install dependencies
+        run: |
+          spack compiler find
+          spack external find
+          spack install --no-check-signature starpu@1.4.7 ~mpi ~examples ~fortran ~openmp
+          spack install --no-check-signature openblas@0.3.28 threads=none
+
+      - name: Push to binary cache
+        run: |
+          spack buildcache push --base-image ubuntu:24.04 --unsigned --update-index \
+            ci-buildcache starpu openblas
+
+      - name: Configure, build and validate
+        working-directory: starpu
+        run: |
+          eval $(spack load --sh starpu@1.4.7 openblas@0.3.28 threads=none)
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_VALIDATION=ON
+          cmake --build build -j$(nproc)
+          STARPU_SILENT=1 ./build/cholesky_starpu \
+            --threads 2 \
+            --size_start 64 --size_stop 64 \
+            --tiles_start 2 --tiles_stop 4 --loop 1 \
+            2>stderr.txt | tee stdout.txt
+          cat stderr.txt
+          if grep -q "Validation warning" stderr.txt; then
+            echo "FAILED: residual exceeds tolerance"
+            exit 1
+          fi
+          if ! grep -q "\[validate\]" stdout.txt; then
+            echo "FAILED: no validation output found (ENABLE_VALIDATION may not have taken effect)"
+            exit 1
+          fi
+          echo "All residuals within tolerance."
