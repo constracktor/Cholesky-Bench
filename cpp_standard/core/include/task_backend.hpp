@@ -28,6 +28,7 @@
 #include <execution>
 #include <future>
 #include <numeric>
+#include <semaphore>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -57,18 +58,46 @@ inline std::shared_future<void> make_ready_future()
 }
 
 /**
+ * @brief Upper bound on tasks that exist (and so hold an OS thread) at the same time.
+ *
+ * Every dataflow call launches one thread. Without a bound, a fine tiling (about 3.6e5 tasks at 128 tiles) would
+ * exhaust the per-user thread limit. Submission blocks while the bound is reached. This cannot deadlock: tasks
+ * are submitted in dependency order, so a live task only ever waits on tasks that were launched before it, and the
+ * oldest unfinished task always has all of its inputs ready.
+ */
+inline constexpr std::ptrdiff_t max_tasks_in_flight = 16'384;
+
+inline std::counting_semaphore<> &task_slots()
+{
+    static std::counting_semaphore<> slots(max_tasks_in_flight);
+    return slots;
+}
+
+/**
  * @brief std::library analogue of hpx::dataflow.
  *
  * Launches the callable @p f asynchronously via std::async. Dependency
  * futures are forwarded as arguments and waited on inside the task body,
  * so downstream work only proceeds once all dependencies are ready.
+ * Blocks the caller while max_tasks_in_flight tasks are alive.
  */
 template <typename F, typename... Args>
 auto dataflow(F &&f, Args &&...args)
 {
+    task_slots().acquire();
     return std::async(std::launch::async,
                       [f = std::forward<F>(f), tup = std::make_tuple(std::forward<Args>(args)...)]() mutable
-                      { return std::apply(f, tup); })
+                      {
+                          struct Release
+                          {
+                              ~Release() { task_slots().release(); }
+                          } release;
+                          // std::async keeps this callable alive inside the shared state, so the captured input
+                          // futures would pin every earlier tile version until the end of the factorization. Move them
+                          // out so they are released as soon as the task has run (as hpx::dataflow does).
+                          auto inputs = std::move(tup);
+                          return std::apply(f, std::move(inputs));
+                      })
         .share();
 }
 
