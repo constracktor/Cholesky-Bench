@@ -11,6 +11,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
+
 namespace
 {
 
@@ -116,6 +120,16 @@ Options parse_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+#ifdef __GLIBC__
+    // glibc serves every allocation of at least 128 KiB with a mapping of its own. A fine tiling has tens of thousands
+    // of such tiles, and the future-based modes hold a second copy of each, which exceeds vm.max_map_count (65530) at
+    // 256 tiles. Keep tile data on the heap instead (32 MiB is the largest threshold glibc accepts), like the jemalloc
+    // build of the HPX variant does.
+    if (mallopt(M_MMAP_THRESHOLD, 32 * 1024 * 1024) == 0)
+    {
+        std::cerr << "warning: mallopt(M_MMAP_THRESHOLD) failed" << std::endl;
+    }
+#endif
     ///////////////////////////////////////////////////////////////////////////
     // cmdline arguments
     const Options opt = parse_args(argc, argv);
