@@ -15,6 +15,13 @@ inline std::size_t isqrt_exact(std::size_t x)
     return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
 }
 
+// Tasks on the critical path (POTRF and TRSM) are marked high priority: ready ones run before GEMM/SYRK updates.
+template <typename F, typename... Args>
+auto critical(F &&f, Args &&...args)
+{
+    return std_backend::dataflow_high_priority(std::forward<F>(f), std::forward<Args>(args)...);
+}
+
 // Tiled Cholesky Algorithm
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles)
 {
@@ -29,11 +36,11 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
             for (std::size_t k = 0; k < n_tiles; k++)
             {
                 // POTRF: Compute Cholesky factor L
-                ft_tiles[k * n_tiles + k] = std_backend::dataflow(f_potrf, ft_tiles[k * n_tiles + k], N);
+                ft_tiles[k * n_tiles + k] = critical(f_potrf, ft_tiles[k * n_tiles + k], N);
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // TRSM:  Solve X * L^T = A
-                    ft_tiles[m * n_tiles + k] = std_backend::dataflow(
+                    ft_tiles[m * n_tiles + k] = critical(
                         f_trsm, ft_tiles[k * n_tiles + k], ft_tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                 }
                 for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -226,13 +233,12 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        dep_tiles[k * n_tiles + k] =
-            std_backend::dataflow(potrf_f, dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
+        dep_tiles[k * n_tiles + k] = critical(potrf_f, dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            dep_tiles[m * n_tiles + k] = std_backend::dataflow(
+            dep_tiles[m * n_tiles + k] = critical(
                 trsm_f,
                 dep_tiles[k * n_tiles + k],  // dep on L
                 dep_tiles[m * n_tiles + k],  // dep on A

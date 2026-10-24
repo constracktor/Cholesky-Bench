@@ -3,14 +3,14 @@
 
 #pragma once
 
-#include <future>
+#include "task_backend.hpp"
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 using Tiled_vector_matrix = std::vector<std::vector<double>>;
-using Tiled_future_matrix = std::vector<std::shared_future<std::vector<double>>>;
-using Tiled_void_matrix = std::vector<std::shared_future<void>>;
+using Tiled_future_matrix = std::vector<std_backend::future<std::vector<double>>>;
+using Tiled_void_matrix = std::vector<std_backend::future<void>>;
 
 namespace cpu
 {
@@ -57,7 +57,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
 void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &tiles);
 
 /**
- * @brief Right-looking tiled Cholesky using std::shared_future<void> for dependency tracking.
+ * @brief Right-looking tiled Cholesky using std_backend::future<void> for dependency tracking.
  *        Tile data lives in @p tiles (no copies); @p dep_tiles carries only completion signals.
  * @param tiles     flat lower-triangular tile data (mutated in-place)
  * @param dep_tiles matching void futures

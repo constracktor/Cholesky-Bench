@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <future>
+#include "task_backend.hpp"
 #include <vector>
 
-using void_future = std::shared_future<void>;
-using vector_future = std::shared_future<std::vector<double>>;
+using void_future = std_backend::future<void>;
+using vector_future = std_backend::future<std::vector<double>>;
 using vector = std::vector<double>;
 
 // Constants that are compatible with CBLAS
@@ -120,10 +120,10 @@ void gemm(const vector &A,
           const BLAS_TRANSPOSE transpose_B);
 
 ///////////////////////////////////////////////////////////////////////////////////////
-// Void-future variants. Unlike hpx::dataflow (which awaits dependencies before
-// invoking the callable), the std::async-based dataflow passes the dependency
-// futures straight into the task, so each wrapper waits on its own dependencies
-// first and then runs the in-place BLAS call on the vector& (no tile copy).
+// Void-future variants. Like the vector-future variants, the dependency futures
+// are passed into the task (already ready when it runs); the wrappers wait on
+// them as a cheap safety net and then run the in-place BLAS call on the vector&
+// (no tile copy).
 
 /**
  * @brief FP64 In-place Cholesky decomposition of A, ordered via void futures

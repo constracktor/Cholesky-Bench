@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include <future>
+#include "task_backend.hpp"
 #include <vector>
 
 using Tiled_vector_matrix = std::vector<std::vector<double>>;
-using Tiled_future_matrix = std::vector<std::shared_future<std::vector<double>>>;
-using Tiled_void_matrix = std::vector<std::shared_future<void>>;
+using Tiled_future_matrix = std::vector<std_backend::future<std::vector<double>>>;
+using Tiled_void_matrix = std::vector<std_backend::future<void>>;
 
 /**
  * @brief Generate a tile of a random symmetric positive-definite tiled matrix

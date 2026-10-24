@@ -10,34 +10,6 @@
 #include "lapacke.h"
 #endif
 
-#include <algorithm>
-#include <semaphore>
-#include <thread>
-
-namespace
-{
-// Bounds how many threads are inside a BLAS call at once. The std::async backend runs one thread per task, so
-// thousands of threads can become runnable together. OpenBLAS keeps a fixed number of work buffers and, once they
-// are exhausted, falls back to an auxiliary array that is not thread safe and corrupts the heap. Capping the
-// concurrent callers at the core count avoids that and matches the thread budget of the HPX and OpenMP variants.
-class Blas_guard
-{
-  public:
-    Blas_guard() { slots().acquire(); }
-
-    ~Blas_guard() { slots().release(); }
-
-    Blas_guard(const Blas_guard &) = delete;
-    Blas_guard &operator=(const Blas_guard &) = delete;
-
-  private:
-    static std::counting_semaphore<> &slots()
-    {
-        static std::counting_semaphore<> s(std::max(1u, std::thread::hardware_concurrency()));
-        return s;
-    }
-};
-}  // namespace
 #endif  // !DISABLE_COMPUTATION
 
 #include <cstdio>
@@ -46,9 +18,8 @@ class Blas_guard
 
 vector f_potrf(vector_future f_A, const int N)
 {
-    vector A = f_A.get();
+    vector A = f_A.take();
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // POTRF: in-place Cholesky decomposition of A
     // use dpotrf2 recursive version for better stability
     lapack_int info = LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
@@ -72,9 +43,8 @@ vector f_trsm(vector_future f_L,
 
 {
     const vector &L = f_L.get();
-    vector A = f_A.get();
+    vector A = f_A.take();
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // TRSM constants
     const double alpha = 1.0;
     // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
@@ -105,9 +75,8 @@ vector f_trsm(vector_future f_L,
 vector f_syrk(vector_future f_A, vector_future f_B, const int N)
 {
     const vector &B = f_B.get();
-    vector A = f_A.get();
+    vector A = f_A.take();
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // SYRK constants
     const double alpha = -1.0;
     const double beta = 1.0;
@@ -130,11 +99,10 @@ vector f_gemm(vector_future f_A,
               const BLAS_TRANSPOSE transpose_A,
               const BLAS_TRANSPOSE transpose_B)
 {
-    vector C = f_C.get();
+    vector C = f_C.take();
     const vector &B = f_B.get();
     const vector &A = f_A.get();
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // GEMM constants
     const double alpha = -1.0;
     const double beta = 1.0;
@@ -172,7 +140,6 @@ vector f_gemm(vector_future f_A,
 void potrf(vector &A, const int N)
 {
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // POTRF: in-place Cholesky decomposition of A
     // use dpotrf2 recursive version for better stability
     lapack_int info = LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
@@ -191,7 +158,6 @@ void trsm(
 
 {
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // TRSM constants
     const double alpha = 1.0;
     // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
@@ -221,7 +187,6 @@ void trsm(
 void syrk(vector &A, const vector &B, const int N)
 {
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // SYRK constants
     const double alpha = -1.0;
     const double beta = 1.0;
@@ -244,7 +209,6 @@ void gemm(const vector &A,
           const BLAS_TRANSPOSE transpose_B)
 {
 #ifndef DISABLE_COMPUTATION
-    Blas_guard guard;
     // GEMM constants
     const double alpha = -1.0;
     const double beta = 1.0;
