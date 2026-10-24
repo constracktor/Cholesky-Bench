@@ -22,6 +22,7 @@ SCRIPT_DIR="$(pwd)"
 # Run executable
 srun --cpu-bind=cores "$SCRIPT_DIR/build/cholesky_hpx" \
   --hpx:threads=128 \
+  --hpx:queuing=local \
   --loop=20 \
   --size_start=65536 \
   --size_stop=65536 \

@@ -19,9 +19,14 @@
 
 // BLAS level 3 operations
 
+// Take over the tile owned by a future instead of copying it. Safe here because
+// the tile consumed as the in/out operand of a task is never read by another
+// task: its future is only passed on to the next update of the same tile.
+inline static vector take(const vector_future &f) { return std::move(const_cast<vector &>(f.get())); }
+
 vector f_potrf(vector_future f_A, const int N)
 {
-    vector A = f_A.get();
+    vector A = take(f_A);
 #ifndef DISABLE_COMPUTATION
     // POTRF: in-place Cholesky decomposition of A
     // use dpotrf2 recursive version for better stability
@@ -48,7 +53,7 @@ vector f_trsm(vector_future f_L,
 
 {
     const vector &L = f_L.get();
-    vector A = f_A.get();
+    vector A = take(f_A);
 #ifndef DISABLE_COMPUTATION
     // TRSM constants
     const double alpha = 1.0;
@@ -80,7 +85,7 @@ vector f_trsm(vector_future f_L,
 vector f_syrk(vector_future f_A, vector_future f_B, const int N)
 {
     const vector &B = f_B.get();
-    vector A = f_A.get();
+    vector A = take(f_A);
 #ifndef DISABLE_COMPUTATION
     // SYRK constants
     const double alpha = -1.0;
@@ -104,7 +109,7 @@ vector f_gemm(vector_future f_A,
               const BLAS_TRANSPOSE transpose_A,
               const BLAS_TRANSPOSE transpose_B)
 {
-    vector C = f_C.get();
+    vector C = take(f_C);
     const vector &B = f_B.get();
     const vector &A = f_A.get();
 #ifndef DISABLE_COMPUTATION
