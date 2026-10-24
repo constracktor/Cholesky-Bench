@@ -344,6 +344,32 @@ double right_looking_cholesky_tiled_ttg(Tiled_vector_matrix &tiles)
     auto op_gemm = make_gemm(A, disp_gemm, trsm_gemm_row, trsm_gemm_col, gemm_gemm, gemm_trsm, gemm_gemm);
     auto op_result = make_result(A, result);
 
+    // Priorities from DPLASMA (as in the upstream TTG potrf example): favor the
+    // critical path. Computed in signed arithmetic with the DPLASMA meaning of
+    // (m, n, k) = (row, column, step).
+    const long nt = static_cast<long>(n_tiles);
+    auto cube = [](long x) { return x * x * x; };
+    op_potrf->set_priomap(
+        [nt, cube](const Key1 &key) { return static_cast<int>(cube(nt - static_cast<long>(key[0]))); });
+    op_trsm->set_priomap(
+        [nt, cube](const Key2 &key)
+        {
+            const long m = key[0], k = key[1];
+            return static_cast<int>(cube(nt - m) + 3 * (2 * nt - k - m - 1) * (m - k));
+        });
+    op_syrk->set_priomap(
+        [nt, cube](const Key2 &key)
+        {
+            const long k = key[0], m = key[1];  // SYRK(k, m): step k, row m
+            return static_cast<int>(cube(nt - m) + 3 * (m - k));
+        });
+    op_gemm->set_priomap(
+        [nt, cube](const Key3 &key)
+        {
+            const long m = key[0], n = key[1], k = key[2];
+            return static_cast<int>(cube(nt - m) + 3 * (2 * nt - m - n - 3) * (m - n) + 6 * (m - k));
+        });
+
     auto connected = ttg::make_graph_executable(op_load.get());
     assert(connected);
     (void) connected;

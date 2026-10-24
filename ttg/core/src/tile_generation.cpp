@@ -10,6 +10,40 @@
 #include <random>
 #endif
 
+#if defined(__linux__)
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
+namespace
+{
+// Spread the pages of the tile storage round-robin over all NUMA nodes while
+// the tiles are generated (the pages are first touched by the generating
+// thread). Without this, every tile lives on the NUMA node of the generating
+// thread and the memory-bound tasks of all other NUMA domains compete for one
+// node's memory bandwidth. Uses the raw syscall, so no libnuma is required;
+// failure (non-NUMA or restricted systems) is silently ignored.
+struct InterleavePolicy
+{
+#if defined(__linux__) && defined(SYS_set_mempolicy)
+    static constexpr int mpol_default = 0;
+    constexpr static int mpol_interleave = 3;
+
+    InterleavePolicy()
+    {
+        unsigned long mask[16];
+        for (auto &m : mask)
+        {
+            m = ~0UL;
+        }
+        syscall(SYS_set_mempolicy, mpol_interleave, mask, 1024UL);
+    }
+
+    ~InterleavePolicy() { syscall(SYS_set_mempolicy, mpol_default, nullptr, 0UL); }
+#endif
+};
+}  // namespace
+
 std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)
 {
 #ifdef DISABLE_COMPUTATION
@@ -68,6 +102,7 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
 {
     // Tiled data structure
+    InterleavePolicy numa_interleave;
     Tiled_vector_matrix tiled_matrix;
     // Preallocate memory
     tiled_matrix.resize(n_tiles * n_tiles);  // No reserve because of triangular structure
