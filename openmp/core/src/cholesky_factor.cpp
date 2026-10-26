@@ -101,9 +101,11 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                     }
 
                     // Dynamic scheduling due to triangular structure
+                    // Rows are handed out from the bottom: the longest rows (most GEMMs) start first
 #pragma omp for schedule(dynamic, 1)
-                    for (std::size_t m = k + 1; m < n_tiles; ++m)
+                    for (std::size_t mi = k + 1; mi < n_tiles; ++mi)
                     {
+                        const std::size_t m = n_tiles - 1 - (mi - k - 1);
                         // SYRK: A = A - B * B^T
                         syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
 
@@ -124,51 +126,55 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
             }
             break;
         case Variant::task_naive:
+            // Tasks are generated in parallel by all threads (worksharing loops over rows with nowait),
+            // instead of by a single thread. The barriers replace the taskwaits and also execute pending tasks.
 #pragma omp parallel
             {
-#pragma omp single
+                for (std::size_t k = 0; k < n_tiles; ++k)
                 {
-                    for (std::size_t k = 0; k < n_tiles; ++k)
+                    // POTRF: Compute Cholesky factor L
+#pragma omp single
                     {
-                        // POTRF: Compute Cholesky factor L
                         potrf(tiles[k * n_tiles + k], N);
-
-                        for (std::size_t m = k + 1; m < n_tiles; ++m)
-                        {
-                            // TRSM:  Solve X * L^T = A
-#pragma omp task firstprivate(k, m)
-                            {
-                                trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
-                            }
-                        }
-#pragma omp taskwait
-
-                        for (std::size_t m = k + 1; m < n_tiles; ++m)
-                        {
-                            // SYRK: A = A - B * B^T
-#pragma omp task firstprivate(k, m)
-                            {
-                                syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-                            }
-
-                            for (std::size_t n = k + 1; n < m; ++n)
-                            {
-                                // GEMM: C = C - A * B^T
-#pragma omp task firstprivate(k, m, n)
-                                {
-                                    gemm(tiles[m * n_tiles + k],
-                                         tiles[n * n_tiles + k],
-                                         tiles[m * n_tiles + n],
-                                         N,
-                                         N,
-                                         N,
-                                         Blas_no_trans,
-                                         Blas_trans);
-                                }
-                            }
-                        }
-#pragma omp taskwait
                     }
+
+#pragma omp for schedule(static) nowait
+                    for (std::size_t m = k + 1; m < n_tiles; ++m)
+                    {
+                        // TRSM:  Solve X * L^T = A
+#pragma omp task firstprivate(k, m)
+                        {
+                            trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                        }
+                    }
+#pragma omp barrier
+
+#pragma omp for schedule(dynamic, 1) nowait
+                    for (std::size_t m = k + 1; m < n_tiles; ++m)
+                    {
+                        // SYRK: A = A - B * B^T
+#pragma omp task firstprivate(k, m)
+                        {
+                            syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
+                        }
+
+                        for (std::size_t n = k + 1; n < m; ++n)
+                        {
+                            // GEMM: C = C - A * B^T
+#pragma omp task firstprivate(k, m, n)
+                            {
+                                gemm(tiles[m * n_tiles + k],
+                                     tiles[n * n_tiles + k],
+                                     tiles[m * n_tiles + n],
+                                     N,
+                                     N,
+                                     N,
+                                     Blas_no_trans,
+                                     Blas_trans);
+                            }
+                        }
+                    }
+#pragma omp barrier
                 }
             }
             break;
