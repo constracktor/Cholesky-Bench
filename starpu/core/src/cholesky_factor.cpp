@@ -141,14 +141,34 @@ void register_tiles(Tiled_vector_matrix &tiles, Tile_handles &handles)
     }
 }
 
+namespace
+{
+// Build and submit a task directly (avoids the variadic argument parsing of starpu_task_insert).
+inline void submit(
+    starpu_codelet &cl, starpu_data_handle_t h0, starpu_data_handle_t h1 = nullptr, starpu_data_handle_t h2 = nullptr)
+{
+    starpu_task *task = starpu_task_create();
+    task->cl = &cl;
+    task->handles[0] = h0;
+    if (h1)
+    {
+        task->handles[1] = h1;
+    }
+    if (h2)
+    {
+        task->handles[2] = h2;
+    }
+    STARPU_CHECK_RETURN_VALUE(starpu_task_submit(task), "starpu_task_submit");
+}
+}  // namespace
+
 void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, bool synchronize)
 {
     Codelets &cl = codelets();
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        STARPU_CHECK_RETURN_VALUE(
-            starpu_task_insert(&cl.potrf, STARPU_RW, handles[k * n_tiles + k], 0), "starpu_task_insert");
+        submit(cl.potrf, handles[k * n_tiles + k]);
         if (synchronize)
         {
             starpu_task_wait_for_all();
@@ -157,10 +177,7 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            STARPU_CHECK_RETURN_VALUE(
-                starpu_task_insert(
-                    &cl.trsm, STARPU_R, handles[k * n_tiles + k], STARPU_RW, handles[m * n_tiles + k], 0),
-                "starpu_task_insert");
+            submit(cl.trsm, handles[k * n_tiles + k], handles[m * n_tiles + k]);
         }
         if (synchronize)
         {
@@ -170,25 +187,12 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // SYRK: A = A - B * B^T
-            STARPU_CHECK_RETURN_VALUE(
-                starpu_task_insert(
-                    &cl.syrk, STARPU_R, handles[m * n_tiles + k], STARPU_RW, handles[m * n_tiles + m], 0),
-                "starpu_task_insert");
+            submit(cl.syrk, handles[m * n_tiles + k], handles[m * n_tiles + m]);
 
             for (std::size_t n = k + 1; n < m; n++)
             {
                 // GEMM: C = C - A * B^T
-                STARPU_CHECK_RETURN_VALUE(
-                    starpu_task_insert(
-                        &cl.gemm,
-                        STARPU_R,
-                        handles[m * n_tiles + k],
-                        STARPU_R,
-                        handles[n * n_tiles + k],
-                        STARPU_RW,
-                        handles[m * n_tiles + n],
-                        0),
-                    "starpu_task_insert");
+                submit(cl.gemm, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
             }
         }
         if (synchronize)

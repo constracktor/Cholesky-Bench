@@ -15,6 +15,8 @@
 #include <iostream>
 #include <starpu.h>
 #include <string>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <vector>
 
 namespace
@@ -54,6 +56,19 @@ long arg_threads(int argc, char **argv)
 int main(int argc, char *argv[])
 {
     ///////////////////////////////////////////////////////////////////////////
+    // Interleave all pages of the process over the NUMA nodes (MPOL_INTERLEAVE = 3, all nodes). The tiles are
+    // generated (first touched) by this one thread; without this they all end up on a single NUMA node while
+    // the workers are spread over all of them.
+    {
+        unsigned long nodemask[16];
+        for (auto &w : nodemask)
+        {
+            w = ~0UL;
+        }
+        syscall(SYS_set_mempolicy, 3, nodemask, 16 * sizeof(unsigned long) * 8);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
     // cmdline arguments
     const std::size_t LOOP = arg_value(argc, argv, "--loop", 1);
 
@@ -70,6 +85,10 @@ int main(int argc, char *argv[])
     ///////////////////////////////////////////////////////////////////////////
     // Initialize StarPU: CPU workers only. The scheduler is chosen via the
     // STARPU_SCHED environment variable (default: lws).
+    // The submitting (main) thread gets a core of its own: with all cores occupied by workers it is starved and
+    // task submission becomes the bottleneck. StarPU then uses one worker less than the cores it may use.
+    // This default can be overridden via the environment (STARPU_MAIN_THREAD_BIND).
+    setenv("STARPU_MAIN_THREAD_BIND", "1", 0);
     starpu_conf conf;
     starpu_conf_init(&conf);
     conf.ncuda = 0;
