@@ -7,6 +7,7 @@
 #include "cholesky_factor.hpp"
 
 #include "adapter_cblas_fp64.hpp"
+#include "tile_generation.hpp"
 #include <cmath>
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
@@ -23,11 +24,14 @@ inline std::size_t isqrt_exact(std::size_t x)
     return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
 }
 
-// Submit one task: dataflow on annotated function
+// Submit one task on the owner of the tile it writes: dataflow on annotated function. The critical-path kernels
+// (POTRF, TRSM) run at high priority.
 template <typename F, typename... Args>
-static auto df(F f, const char *name, Args &&...args)
+static auto df(bool critical, std::size_t row, std::size_t col, F f, const char *name, Args &&...args)
 {
-    return hpx::dataflow(hpx::annotated_function(f, name), std::forward<Args>(args)...);
+    const auto priority = critical ? hpx::threads::thread_priority::high : hpx::threads::thread_priority::normal;
+    return hpx::dataflow(
+        tile_policy(row, col, priority), hpx::annotated_function(f, name), std::forward<Args>(args)...);
 }
 
 // Submission of independent tile tasks (distinct output tiles). With parallel == true the
@@ -64,7 +68,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        ft_tiles[k * n_tiles + k] = df(f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
+        ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
         if (sync)
         {
             ft_tiles[k * n_tiles + k].get();
@@ -76,7 +80,10 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                     {
                         // TRSM:  Solve X * L^T = A
                         ft_tiles[m * n_tiles + k] =
-                            df(f_trsm,
+                            df(true,
+                               m,
+                               k,
+                               f_trsm,
                                "cholesky_trsm",
                                ft_tiles[k * n_tiles + k],
                                ft_tiles[m * n_tiles + k],
@@ -92,30 +99,34 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 ft_tiles[m * n_tiles + k].get();
             }
         }
-        submit_loop(!sync,
-                    k + 1,
-                    n_tiles,
-                    [&](std::size_t m)
-                    {
-                        // SYRK:  A = A - B * B^T
-                        ft_tiles[m * n_tiles + m] =
-                            df(f_syrk, "cholesky_syrk", ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
-                        for (std::size_t n = k + 1; n < m; n++)
-                        {
-                            // GEMM: C = C - A * B^T
-                            ft_tiles[m * n_tiles + n] =
-                                df(f_gemm,
-                                   "cholesky_gemm",
-                                   ft_tiles[m * n_tiles + k],
-                                   ft_tiles[n * n_tiles + k],
-                                   ft_tiles[m * n_tiles + n],
-                                   N,
-                                   N,
-                                   N,
-                                   Blas_no_trans,
-                                   Blas_trans);
-                        }
-                    });
+        submit_loop(
+            !sync,
+            k + 1,
+            n_tiles,
+            [&](std::size_t m)
+            {
+                // SYRK:  A = A - B * B^T
+                ft_tiles[m * n_tiles + m] =
+                    df(false, m, m, f_syrk, "cholesky_syrk", ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
+                for (std::size_t n = k + 1; n < m; n++)
+                {
+                    // GEMM: C = C - A * B^T
+                    ft_tiles[m * n_tiles + n] =
+                        df(false,
+                           m,
+                           n,
+                           f_gemm,
+                           "cholesky_gemm",
+                           ft_tiles[m * n_tiles + k],
+                           ft_tiles[n * n_tiles + k],
+                           ft_tiles[m * n_tiles + n],
+                           N,
+                           N,
+                           N,
+                           Blas_no_trans,
+                           Blas_trans);
+                }
+            });
         if (sync)
         {
             for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -295,7 +306,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
     {
         // POTRF: Compute Cholesky factor L
         dep_tiles[k * n_tiles + k] =
-            df(potrf_f, "cholesky_potrf", dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
+            df(true, k, k, potrf_f, "cholesky_potrf", dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
 
         submit_loop(!sync,
                     k + 1,
@@ -304,7 +315,10 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
                     {
                         // TRSM: Solve X * L^T = A
                         dep_tiles[m * n_tiles + k] =
-                            df(trsm_f,
+                            df(true,
+                               m,
+                               k,
+                               trsm_f,
                                "cholesky_trsm",
                                dep_tiles[k * n_tiles + k],  // dep on L
                                dep_tiles[m * n_tiles + k],  // dep on A
@@ -323,7 +337,10 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
                     {
                         // SYRK: A = A - B * B^T
                         dep_tiles[m * n_tiles + m] =
-                            df(syrk_f,
+                            df(false,
+                               m,
+                               m,
+                               syrk_f,
                                "cholesky_syrk",
                                dep_tiles[m * n_tiles + m],  // dep on A
                                dep_tiles[m * n_tiles + k],  // dep on B
@@ -334,20 +351,23 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
                         for (std::size_t n = k + 1; n < m; n++)
                         {
                             // GEMM: C[m,n] = C[m,n] - A[m,k] * B[n,k]^T
-                            dep_tiles[m * n_tiles + n] =
-                                df(gemm_f,
-                                   "cholesky_gemm",
-                                   dep_tiles[m * n_tiles + k],  // dep on A
-                                   dep_tiles[n * n_tiles + k],  // dep on B
-                                   dep_tiles[m * n_tiles + n],  // dep on C
-                                   std::cref(tiles[m * n_tiles + k]),
-                                   std::cref(tiles[n * n_tiles + k]),
-                                   std::ref(tiles[m * n_tiles + n]),
-                                   N,
-                                   N,
-                                   N,
-                                   Blas_no_trans,
-                                   Blas_trans);
+                            dep_tiles[m * n_tiles + n] = df(
+                                false,
+                                m,
+                                n,
+                                gemm_f,
+                                "cholesky_gemm",
+                                dep_tiles[m * n_tiles + k],  // dep on A
+                                dep_tiles[n * n_tiles + k],  // dep on B
+                                dep_tiles[m * n_tiles + n],  // dep on C
+                                std::cref(tiles[m * n_tiles + k]),
+                                std::cref(tiles[n * n_tiles + k]),
+                                std::ref(tiles[m * n_tiles + n]),
+                                N,
+                                N,
+                                N,
+                                Blas_no_trans,
+                                Blas_trans);
                         }
                     });
     }

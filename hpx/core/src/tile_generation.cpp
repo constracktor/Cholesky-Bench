@@ -7,9 +7,31 @@
 #include "tile_generation.hpp"
 
 #include <hpx/algorithm.hpp>
+#include <hpx/modules/topology.hpp>
+#include <hpx/runtime.hpp>
 #ifndef DISABLE_COMPUTATION
 #include <random>
 #endif
+
+std::size_t tile_owner(std::size_t row, std::size_t col)
+{
+    static const std::size_t n_threads = hpx::get_num_worker_threads();
+    static const std::size_t n_domains = [&]
+    {
+        const std::size_t d = hpx::threads::create_topology().get_number_of_numa_nodes();
+        return (d > 0 && n_threads % d == 0) ? d : std::size_t{ 1 };
+    }();
+    const std::size_t per_domain = n_threads / n_domains;
+    return (row % n_domains) * per_domain + (col + row / n_domains) % per_domain;
+}
+
+hpx::launch::async_policy tile_policy(std::size_t row, std::size_t col, hpx::threads::thread_priority priority)
+{
+    return hpx::launch::async_policy(
+        priority,
+        hpx::threads::thread_stacksize::default_,
+        hpx::threads::thread_schedule_hint(static_cast<std::int16_t>(tile_owner(row, col))));
+}
 
 std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)
 {
@@ -66,7 +88,7 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 #endif
 }
 
-Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
+Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles, bool owner_placed)
 {
     // Tiled data structure
     Tiled_vector_matrix tiled_matrix;
@@ -78,18 +100,36 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     (void) problem_size;
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    hpx::experimental::for_loop(
-        hpx::execution::par,
-        std::size_t{ 0 },
-        std::size_t(n_tiles),
-        [&](std::size_t i)
+    if (owner_placed)
+    {
+        std::vector<hpx::future<void>> done;
+        done.reserve(n_tiles * (n_tiles + 1) / 2);
+        for (std::size_t i = 0; i < n_tiles; ++i)
         {
-            hpx::experimental::for_loop(
-                hpx::execution::par,
-                std::size_t{ 0 },
-                i + 1,
-                [&](std::size_t j) { tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles); });
-        });
+            for (std::size_t j = 0; j <= i; ++j)
+            {
+                done.push_back(
+                    hpx::async(tile_policy(i, j),
+                               [&, i, j] { tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles); }));
+            }
+        }
+        hpx::wait_all(done);
+    }
+    else
+    {
+        hpx::experimental::for_loop(
+            hpx::execution::par,
+            std::size_t{ 0 },
+            std::size_t(n_tiles),
+            [&](std::size_t i)
+            {
+                hpx::experimental::for_loop(
+                    hpx::execution::par,
+                    std::size_t{ 0 },
+                    i + 1,
+                    [&](std::size_t j) { tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles); });
+            });
+    }
 #endif
 
     return tiled_matrix;
@@ -118,7 +158,7 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
     {
         for (std::size_t j = 0; j <= i; j++)
         {
-            tiled_matrix[i * n_tiles + j] = hpx::async(&gen_tile, i, j, tile_size, n_tiles);
+            tiled_matrix[i * n_tiles + j] = hpx::async(tile_policy(i, j), &gen_tile, i, j, tile_size, n_tiles);
         }
     }
     // Synchronize
