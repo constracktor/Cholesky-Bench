@@ -55,7 +55,7 @@ if command -v spack &>/dev/null; then
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
     module load gcc/14.2.0
-    spack load hpx@1.11.0%gcc@14.2.0 arch=linux-almalinux9-zen3
+    spack load hpx@2.0.0%gcc@14.2.0 arch=linux-almalinux9-zen3
     spack load openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=none
 
   else
