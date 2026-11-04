@@ -7,6 +7,7 @@
 #include "cholesky_factor.hpp"
 
 #include "adapter_cblas_fp64.hpp"
+#include "placement.hpp"
 #include <cmath>
 #include <stdexcept>
 
@@ -144,11 +145,17 @@ void register_tiles(Tiled_vector_matrix &tiles, Tile_handles &handles)
 namespace
 {
 // Build and submit a task directly (avoids the variadic argument parsing of starpu_task_insert).
-inline void submit(
-    starpu_codelet &cl, starpu_data_handle_t h0, starpu_data_handle_t h1 = nullptr, starpu_data_handle_t h2 = nullptr)
+// The task is placed on the owner of tile (row, col), the tile it writes.
+inline void submit(starpu_codelet &cl,
+                   std::size_t row,
+                   std::size_t col,
+                   starpu_data_handle_t h0,
+                   starpu_data_handle_t h1 = nullptr,
+                   starpu_data_handle_t h2 = nullptr)
 {
     starpu_task *task = starpu_task_create();
     task->cl = &cl;
+    placement::place_task(task, row, col);
     task->handles[0] = h0;
     if (h1)
     {
@@ -168,7 +175,7 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        submit(cl.potrf, handles[k * n_tiles + k]);
+        submit(cl.potrf, k, k, handles[k * n_tiles + k]);
         if (synchronize)
         {
             starpu_task_wait_for_all();
@@ -177,7 +184,7 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            submit(cl.trsm, handles[k * n_tiles + k], handles[m * n_tiles + k]);
+            submit(cl.trsm, m, k, handles[k * n_tiles + k], handles[m * n_tiles + k]);
         }
         if (synchronize)
         {
@@ -187,12 +194,12 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // SYRK: A = A - B * B^T
-            submit(cl.syrk, handles[m * n_tiles + k], handles[m * n_tiles + m]);
+            submit(cl.syrk, m, m, handles[m * n_tiles + k], handles[m * n_tiles + m]);
 
             for (std::size_t n = k + 1; n < m; n++)
             {
                 // GEMM: C = C - A * B^T
-                submit(cl.gemm, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
+                submit(cl.gemm, m, n, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
             }
         }
         if (synchronize)

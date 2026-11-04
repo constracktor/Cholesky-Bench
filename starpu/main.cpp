@@ -5,6 +5,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include "functions.hpp"
+#include "placement.hpp"
 #include "tile_generation.hpp"
 #ifdef ENABLE_VALIDATION
 #include "validate.hpp"
@@ -15,8 +16,6 @@
 #include <iostream>
 #include <starpu.h>
 #include <string>
-#include <sys/syscall.h>
-#include <unistd.h>
 #include <vector>
 
 namespace
@@ -56,19 +55,6 @@ long arg_threads(int argc, char **argv)
 int main(int argc, char *argv[])
 {
     ///////////////////////////////////////////////////////////////////////////
-    // Interleave all pages of the process over the NUMA nodes (MPOL_INTERLEAVE = 3, all nodes). The tiles are
-    // generated (first touched) by this one thread; without this they all end up on a single NUMA node while
-    // the workers are spread over all of them.
-    {
-        unsigned long nodemask[16];
-        for (auto &w : nodemask)
-        {
-            w = ~0UL;
-        }
-        syscall(SYS_set_mempolicy, 3, nodemask, 16 * sizeof(unsigned long) * 8);
-    }
-
-    ///////////////////////////////////////////////////////////////////////////
     // cmdline arguments
     const std::size_t LOOP = arg_value(argc, argv, "--loop", 1);
 
@@ -98,6 +84,7 @@ int main(int argc, char *argv[])
         conf.ncpus = static_cast<int>(nthreads);
     }
     STARPU_CHECK_RETURN_VALUE(starpu_init(&conf), "starpu_init");
+    placement::init();
 
     // STARPU_NCPU in the environment overrides --threads, so always report the actual worker count.
     const std::size_t reported_threads = static_cast<std::size_t>(starpu_cpu_worker_get_count());
