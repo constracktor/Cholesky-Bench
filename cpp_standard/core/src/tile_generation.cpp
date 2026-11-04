@@ -60,7 +60,7 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 #endif
 }
 
-Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles)
+Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles, bool owner_placed)
 {
     // Tiled data structure
     Tiled_vector_matrix tiled_matrix;
@@ -72,16 +72,33 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     (void) problem_size;
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    std_backend::parallel_for(
-        std::size_t{ 0 },
-        n_tiles,
-        [&](std::size_t i)
+    if (owner_placed)
+    {
+        std::vector<std_backend::future<void>> done;
+        done.reserve(n_tiles * (n_tiles + 1) / 2);
+        for (std::size_t i = 0; i < n_tiles; ++i)
         {
             for (std::size_t j = 0; j <= i; ++j)
             {
-                tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
+                done.push_back(std_backend::dataflow_on_tile(
+                    i, j, false, [&, i, j] { tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles); }));
             }
-        });
+        }
+        std_backend::wait_all(done);
+    }
+    else
+    {
+        std_backend::parallel_for(
+            std::size_t{ 0 },
+            n_tiles,
+            [&](std::size_t i)
+            {
+                for (std::size_t j = 0; j <= i; ++j)
+                {
+                    tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
+                }
+            });
+    }
 #endif
 
     return tiled_matrix;
@@ -110,7 +127,8 @@ Tiled_future_matrix gen_futurized_tiled_matrix(std::size_t problem_size, std::si
     {
         for (std::size_t j = 0; j <= i; j++)
         {
-            tiled_matrix[i * n_tiles + j] = std_backend::dataflow(&gen_tile, i, j, tile_size, n_tiles);
+            tiled_matrix[i * n_tiles + j] =
+                std_backend::dataflow_on_tile(i, j, false, &gen_tile, i, j, tile_size, n_tiles);
         }
     }
     // Synchronize

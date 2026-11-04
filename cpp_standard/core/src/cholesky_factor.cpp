@@ -15,11 +15,12 @@ inline std::size_t isqrt_exact(std::size_t x)
     return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
 }
 
-// Tasks on the critical path (POTRF and TRSM) are marked high priority: ready ones run before GEMM/SYRK updates.
+// Submit a task on the owner of the tile it writes. Tasks on the critical path (POTRF and TRSM) are marked high
+// priority: ready ones run before GEMM/SYRK updates.
 template <typename F, typename... Args>
-auto critical(F &&f, Args &&...args)
+auto df(bool critical, std::size_t row, std::size_t col, F &&f, Args &&...args)
 {
-    return std_backend::dataflow_high_priority(std::forward<F>(f), std::forward<Args>(args)...);
+    return std_backend::dataflow_on_tile(row, col, critical, std::forward<F>(f), std::forward<Args>(args)...);
 }
 
 // Tiled Cholesky Algorithm
@@ -36,31 +37,43 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
             for (std::size_t k = 0; k < n_tiles; k++)
             {
                 // POTRF: Compute Cholesky factor L
-                ft_tiles[k * n_tiles + k] = critical(f_potrf, ft_tiles[k * n_tiles + k], N);
+                ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, ft_tiles[k * n_tiles + k], N);
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // TRSM:  Solve X * L^T = A
-                    ft_tiles[m * n_tiles + k] = critical(
-                        f_trsm, ft_tiles[k * n_tiles + k], ft_tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                    ft_tiles[m * n_tiles + k] =
+                        df(true,
+                           m,
+                           k,
+                           f_trsm,
+                           ft_tiles[k * n_tiles + k],
+                           ft_tiles[m * n_tiles + k],
+                           N,
+                           N,
+                           Blas_trans,
+                           Blas_right);
                 }
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // SYRK:  A = A - B * B^T
                     ft_tiles[m * n_tiles + m] =
-                        std_backend::dataflow(f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
+                        df(false, m, m, f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
                     for (std::size_t n = k + 1; n < m; n++)
                     {
                         // GEMM: C = C - A * B^T
-                        ft_tiles[m * n_tiles + n] = std_backend::dataflow(
-                            f_gemm,
-                            ft_tiles[m * n_tiles + k],
-                            ft_tiles[n * n_tiles + k],
-                            ft_tiles[m * n_tiles + n],
-                            N,
-                            N,
-                            N,
-                            Blas_no_trans,
-                            Blas_trans);
+                        ft_tiles[m * n_tiles + n] =
+                            df(false,
+                               m,
+                               n,
+                               f_gemm,
+                               ft_tiles[m * n_tiles + k],
+                               ft_tiles[n * n_tiles + k],
+                               ft_tiles[m * n_tiles + n],
+                               N,
+                               N,
+                               N,
+                               Blas_no_trans,
+                               Blas_trans);
                     }
                 }
             }
@@ -70,15 +83,24 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
             for (std::size_t k = 0; k < n_tiles; k++)
             {
                 // POTRF: Compute Cholesky factor L
-                ft_tiles[k * n_tiles + k] = std_backend::dataflow(f_potrf, ft_tiles[k * n_tiles + k], N);
+                ft_tiles[k * n_tiles + k] = df(false, k, k, f_potrf, ft_tiles[k * n_tiles + k], N);
                 // Synchronize
                 ft_tiles[k * n_tiles + k].get();
 
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // TRSM:  Solve X * L^T = A
-                    ft_tiles[m * n_tiles + k] = std_backend::dataflow(
-                        f_trsm, ft_tiles[k * n_tiles + k], ft_tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                    ft_tiles[m * n_tiles + k] =
+                        df(false,
+                           m,
+                           k,
+                           f_trsm,
+                           ft_tiles[k * n_tiles + k],
+                           ft_tiles[m * n_tiles + k],
+                           N,
+                           N,
+                           Blas_trans,
+                           Blas_right);
                 }
                 // Synchronize
                 for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -90,20 +112,23 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 {
                     // SYRK:  A = A - B * B^T
                     ft_tiles[m * n_tiles + m] =
-                        std_backend::dataflow(f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
+                        df(false, m, m, f_syrk, ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
                     for (std::size_t n = k + 1; n < m; n++)
                     {
                         // GEMM: C = C - A * B^T
-                        ft_tiles[m * n_tiles + n] = std_backend::dataflow(
-                            f_gemm,
-                            ft_tiles[m * n_tiles + k],
-                            ft_tiles[n * n_tiles + k],
-                            ft_tiles[m * n_tiles + n],
-                            N,
-                            N,
-                            N,
-                            Blas_no_trans,
-                            Blas_trans);
+                        ft_tiles[m * n_tiles + n] =
+                            df(false,
+                               m,
+                               n,
+                               f_gemm,
+                               ft_tiles[m * n_tiles + k],
+                               ft_tiles[n * n_tiles + k],
+                               ft_tiles[m * n_tiles + n],
+                               N,
+                               N,
+                               N,
+                               Blas_no_trans,
+                               Blas_trans);
                     }
                 }
                 // Synchronize
@@ -233,38 +258,48 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        dep_tiles[k * n_tiles + k] = critical(potrf_f, dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
+        dep_tiles[k * n_tiles + k] =
+            df(true, k, k, potrf_f, dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            dep_tiles[m * n_tiles + k] = critical(
-                trsm_f,
-                dep_tiles[k * n_tiles + k],  // dep on L
-                dep_tiles[m * n_tiles + k],  // dep on A
-                std::ref(tiles[k * n_tiles + k]),
-                std::ref(tiles[m * n_tiles + k]),
-                N,
-                N,
-                Blas_trans,
-                Blas_right);
+            dep_tiles[m * n_tiles + k] =
+                df(true,
+                   m,
+                   k,
+                   trsm_f,
+                   dep_tiles[k * n_tiles + k],  // dep on L
+                   dep_tiles[m * n_tiles + k],  // dep on A
+                   std::ref(tiles[k * n_tiles + k]),
+                   std::ref(tiles[m * n_tiles + k]),
+                   N,
+                   N,
+                   Blas_trans,
+                   Blas_right);
         }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // SYRK: A = A - B * B^T
-            dep_tiles[m * n_tiles + m] = std_backend::dataflow(
-                syrk_f,
-                dep_tiles[m * n_tiles + m],  // dep on A
-                dep_tiles[m * n_tiles + k],  // dep on B
-                std::ref(tiles[m * n_tiles + m]),
-                std::cref(tiles[m * n_tiles + k]),
-                N);
+            dep_tiles[m * n_tiles + m] =
+                df(false,
+                   m,
+                   m,
+                   syrk_f,
+                   dep_tiles[m * n_tiles + m],  // dep on A
+                   dep_tiles[m * n_tiles + k],  // dep on B
+                   std::ref(tiles[m * n_tiles + m]),
+                   std::cref(tiles[m * n_tiles + k]),
+                   N);
 
             for (std::size_t n = k + 1; n < m; n++)
             {
                 // GEMM: C[m,n] = C[m,n] - A[m,k] * B[n,k]^T
-                dep_tiles[m * n_tiles + n] = std_backend::dataflow(
+                dep_tiles[m * n_tiles + n] = df(
+                    false,
+                    m,
+                    n,
                     gemm_f,
                     dep_tiles[m * n_tiles + k],  // dep on A
                     dep_tiles[n * n_tiles + k],  // dep on B

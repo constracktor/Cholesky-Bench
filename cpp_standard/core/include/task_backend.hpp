@@ -25,12 +25,16 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <deque>
+#include <filesystem>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <tuple>
 #include <type_traits>
@@ -63,6 +67,7 @@ struct alignas(16) task_base
 
     std::atomic<int> deps{ 1 };
     bool high_priority = false;
+    int hint = -1;  ///< worker whose deque receives the task once it is ready (-1: the submitting worker)
     task_base *next[max_deps] = {};
 };
 
@@ -110,7 +115,7 @@ class pool
     /// tile it just produced warm); any other thread distributes round-robin.
     void submit(task_base *t)
     {
-        std::size_t target = self_id();
+        std::size_t target = t->hint >= 0 ? static_cast<std::size_t>(t->hint) : self_id();
         if (target == npos)
         {
             target = rr_.fetch_add(1, std::memory_order_relaxed) % workers_.size();
@@ -123,6 +128,16 @@ class pool
             w.count[q].store(w.queue[q].size(), std::memory_order_relaxed);
         }
         wake_one();
+    }
+
+    /// Worker that owns tile (row, col): rows are distributed cyclically over the NUMA domains of the workers and
+    /// the columns over the workers of a domain. Tiles are generated on their owner (first touch puts the pages in
+    /// the owner's domain) and every task is queued on the owner of the tile it writes.
+    int owner(std::size_t row, std::size_t col) const
+    {
+        const std::size_t d = row % domains_.size();
+        const std::vector<unsigned> &members = domains_[d];
+        return static_cast<int>(members[(col + row / domains_.size()) % members.size()]);
     }
 
     /// True when called from one of the pool's threads.
@@ -166,10 +181,46 @@ class pool
             workers_.push_back(std::make_unique<worker>());
         }
         cpus_ = allowed_cpus();
+        build_domains(n);
         threads_.reserve(n);
         for (unsigned i = 0; i < n; ++i)
         {
             threads_.emplace_back([this, i] { loop(i); });
+        }
+    }
+
+    /// NUMA node of a CPU (from sysfs); 0 when unknown.
+    static int node_of_cpu(int cpu)
+    {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        for (const auto &e : fs::directory_iterator("/sys/devices/system/cpu/cpu" + std::to_string(cpu), ec))
+        {
+            const std::string name = e.path().filename().string();
+            if (name.rfind("node", 0) == 0 && name.size() > 4 && std::isdigit(static_cast<unsigned char>(name[4])))
+            {
+                return std::stoi(name.substr(4));
+            }
+        }
+        return 0;
+    }
+
+    /// Group the workers by the NUMA node of the CPU they are bound to (a single group when workers are not bound).
+    void build_domains(unsigned n)
+    {
+        std::map<int, std::vector<unsigned>> by_node;
+        for (unsigned i = 0; i < n; ++i)
+        {
+            by_node[cpus_.size() >= n ? node_of_cpu(cpus_[i]) : 0].push_back(i);
+        }
+        domain_of_.assign(n, 0);
+        for (auto &[node, members] : by_node)
+        {
+            for (unsigned w : members)
+            {
+                domain_of_[w] = static_cast<unsigned>(domains_.size());
+            }
+            domains_.push_back(std::move(members));
         }
     }
 
@@ -229,8 +280,43 @@ class pool
         return t;
     }
 
+    task_base *steal_from(std::size_t v, int q)
+    {
+        worker &w = *workers_[v];
+        if (w.count[q].load(std::memory_order_relaxed) == 0)
+        {
+            return nullptr;
+        }
+        std::unique_lock<spinlock> g(w.lock, std::try_to_lock);
+        if (g.owns_lock() && !w.queue[q].empty())
+        {
+            task_base *t = w.queue[q].front();
+            w.queue[q].pop_front();
+            w.count[q].store(w.queue[q].size(), std::memory_order_relaxed);
+            return t;
+        }
+        return nullptr;
+    }
+
+    // Steal the oldest task of another worker: workers of the own NUMA domain first (their tasks work on tiles that
+    // live in this domain), then everybody.
     task_base *steal(std::size_t id, std::size_t start, int q)
     {
+        const std::vector<unsigned> &mine = domains_[domain_of_[id]];
+        if (domains_.size() > 1)
+        {
+            for (std::size_t k = 0; k < mine.size(); ++k)
+            {
+                const std::size_t v = mine[(start + k) % mine.size()];
+                if (v != id)
+                {
+                    if (task_base *t = steal_from(v, q))
+                    {
+                        return t;
+                    }
+                }
+            }
+        }
         const std::size_t n = workers_.size();
         for (std::size_t k = 0; k < n; ++k)
         {
@@ -243,17 +329,8 @@ class pool
             {
                 continue;
             }
-            worker &w = *workers_[v];
-            if (w.count[q].load(std::memory_order_relaxed) == 0)
+            if (task_base *t = steal_from(v, q))
             {
-                continue;
-            }
-            std::unique_lock<spinlock> g(w.lock, std::try_to_lock);
-            if (g.owns_lock() && !w.queue[q].empty())
-            {
-                task_base *t = w.queue[q].front();
-                w.queue[q].pop_front();
-                w.count[q].store(w.queue[q].size(), std::memory_order_relaxed);
                 return t;
             }
         }
@@ -327,6 +404,8 @@ class pool
 
     std::vector<std::unique_ptr<worker>> workers_;
     std::vector<int> cpus_;
+    std::vector<std::vector<unsigned>> domains_;  // workers per NUMA domain
+    std::vector<unsigned> domain_of_;             // domain index of each worker
     constexpr static int spin_rounds_ = 64;
     std::vector<std::jthread> threads_;
     alignas(cache_line) std::atomic<std::size_t> rr_{ 0 };
@@ -520,7 +599,7 @@ struct dataflow_task final : task_base
  * any other argument (they are ready when it runs, so get() does not block). Never blocks the caller.
  */
 template <bool High, typename F, typename... Args>
-auto dataflow_impl(F &&f, Args &&...args)
+auto dataflow_impl(int hint, F &&f, Args &&...args)
 {
     using Result = std::invoke_result_t<std::decay_t<F> &, std::decay_t<Args> &&...>;
     using stored = std::conditional_t<std::is_void_v<Result>, std::monostate, Result>;
@@ -531,6 +610,7 @@ auto dataflow_impl(F &&f, Args &&...args)
     auto *t = new detail::dataflow_task<std::decay_t<F>, Tuple, Result>(
         std::decay_t<F>(std::forward<F>(f)), Tuple(std::forward<Args>(args)...), st);
     t->high_priority = High;
+    t->hint = hint;
     unsigned slot = 0;
     std::apply(
         [&](auto &...a)
@@ -560,7 +640,7 @@ auto dataflow_impl(F &&f, Args &&...args)
 template <typename F, typename... Args>
 auto dataflow(F &&f, Args &&...args)
 {
-    return dataflow_impl<false>(std::forward<F>(f), std::forward<Args>(args)...);
+    return dataflow_impl<false>(-1, std::forward<F>(f), std::forward<Args>(args)...);
 }
 
 /**
@@ -569,7 +649,21 @@ auto dataflow(F &&f, Args &&...args)
 template <typename F, typename... Args>
 auto dataflow_high_priority(F &&f, Args &&...args)
 {
-    return dataflow_impl<true>(std::forward<F>(f), std::forward<Args>(args)...);
+    return dataflow_impl<true>(-1, std::forward<F>(f), std::forward<Args>(args)...);
+}
+
+/**
+ * @brief dataflow() whose task is queued on the owner of tile (row, col) once ready; @p high marks critical-path tasks.
+ */
+template <typename F, typename... Args>
+auto dataflow_on_tile(std::size_t row, std::size_t col, bool high, F &&f, Args &&...args)
+{
+    const int hint = detail::pool::instance().owner(row, col);
+    if (high)
+    {
+        return dataflow_impl<true>(hint, std::forward<F>(f), std::forward<Args>(args)...);
+    }
+    return dataflow_impl<false>(hint, std::forward<F>(f), std::forward<Args>(args)...);
 }
 
 /**
