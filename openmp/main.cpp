@@ -88,12 +88,12 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
                 std::vector<std::string> modes = {
-                    "for_collapse", "for_naive", "task_naive", "task_depend", "task_prio"
+                    "for_collapse", "for_naive", "task_naive", "task_depend", "task_prio", "owner"
                 };
 
                 for (const auto &mode : modes)
                 {
-                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles);
+                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles, mode == "owner");
                     auto cholesky_cpu = cpu::cholesky(tiled_matrix, mode);
 
                     header += ";" + mode;
