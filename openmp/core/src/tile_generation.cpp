@@ -74,7 +74,7 @@ std::size_t tile_owner(std::size_t row, std::size_t col, std::size_t n_threads)
     return (row % D) * per + (col + row / D) % per;
 }
 
-Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles, bool owner_placed)
+Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles, int placed)
 {
     // Tiled data structure
     Tiled_vector_matrix tiled_matrix;
@@ -87,7 +87,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     (void) problem_size;
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    if (owner_placed)
+    if (placed == 1)
     {
         // First touch on the owning thread (same map as the owner variant)
 #pragma omp parallel
@@ -101,6 +101,33 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
                     if (tile_owner(i, j, nt) == tid)
                     {
                         tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
+                    }
+                }
+            }
+        }
+        return tiled_matrix;
+    }
+    if (placed == 2)
+    {
+        // Same map, threads addressed as (domain team, thread in team)
+        const int nt = omp_get_max_threads();
+        const int D = (nt % 8 == 0 && nt >= 8) ? 8 : 1;
+        const int per = nt / D;
+        omp_set_max_active_levels(2);
+#pragma omp parallel num_threads(D)
+        {
+            const std::size_t d = omp_get_thread_num();
+#pragma omp parallel num_threads(per)
+            {
+                const std::size_t tid = d * per + omp_get_thread_num();
+                for (std::size_t i = 0; i < n_tiles; ++i)
+                {
+                    for (std::size_t j = 0; j < i + 1; ++j)
+                    {
+                        if (tile_owner(i, j, nt) == tid)
+                        {
+                            tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
+                        }
                     }
                 }
             }

@@ -21,6 +21,7 @@ int main(int argc, char *argv[])
     std::size_t loop = 1;
     std::size_t size_start = 32, size_stop = 128;
     std::size_t tiles_start = 16, tiles_stop = 32;
+    std::string only_modes;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -40,6 +41,10 @@ int main(int argc, char *argv[])
         else if (arg == "--tiles_start" && i + 1 < argc)
         {
             tiles_start = std::stoul(argv[++i]);
+        }
+        else if (arg == "--modes" && i + 1 < argc)
+        {
+            only_modes = std::string(",") + argv[++i] + ",";
         }
         else if (arg == "--tiles_stop" && i + 1 < argc)
         {
@@ -88,12 +93,16 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
                 std::vector<std::string> modes = {
-                    "for_collapse", "for_naive", "task_naive", "task_depend", "task_prio", "owner"
+                    "for_collapse", "for_naive", "task_naive", "task_depend", "task_prio", "owner", "task_domain"
                 };
 
                 for (const auto &mode : modes)
                 {
-                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles, mode == "owner");
+                    if (!only_modes.empty() && only_modes.find("," + mode + ",") == std::string::npos)
+                    {
+                        continue;
+                    }
+                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles, mode == "owner" ? 1 : (mode == "task_domain" ? 2 : 0));
                     auto cholesky_cpu = cpu::cholesky(tiled_matrix, mode);
 
                     header += ";" + mode;
