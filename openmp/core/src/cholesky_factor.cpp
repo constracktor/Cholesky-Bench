@@ -478,6 +478,57 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
             }
         }
         break;
+        case Variant::for_owner:
+#pragma omp parallel
+            {
+                // Fork-join with a fixed owner per tile (same map as the tile generation):
+                // each phase is a loop over the thread's own tiles, separated by barriers.
+                const std::size_t nt = omp_get_num_threads();
+                const std::size_t tid = omp_get_thread_num();
+                for (std::size_t k = 0; k < n_tiles; ++k)
+                {
+                    if (tile_owner(k, k, nt) == tid)
+                    {
+                        potrf(tiles[k * n_tiles + k], N);
+                    }
+#pragma omp barrier
+                    for (std::size_t m = k + 1; m < n_tiles; ++m)
+                    {
+                        if (tile_owner(m, k, nt) == tid)
+                        {
+                            trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                        }
+                    }
+#pragma omp barrier
+                    for (std::size_t m = k + 1; m < n_tiles; ++m)
+                    {
+                        for (std::size_t n = k + 1; n <= m; ++n)
+                        {
+                            if (tile_owner(m, n, nt) != tid)
+                            {
+                                continue;
+                            }
+                            if (n == m)
+                            {
+                                syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
+                            }
+                            else
+                            {
+                                gemm(tiles[m * n_tiles + k],
+                                     tiles[n * n_tiles + k],
+                                     tiles[m * n_tiles + n],
+                                     N,
+                                     N,
+                                     N,
+                                     Blas_no_trans,
+                                     Blas_trans);
+                            }
+                        }
+                    }
+#pragma omp barrier
+                }
+            }
+            break;
         default:
             // clang-format off
             std::cout << "Variant not supported."; break;

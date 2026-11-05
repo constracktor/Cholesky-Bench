@@ -17,7 +17,7 @@ using Tiled_vector_matrix = std::vector<std::vector<double>>;
 
 namespace cpu
 {
-enum class Variant { for_collapse, for_naive, task_naive, task_depend, task_prio, owner, task_domain };
+enum class Variant { for_collapse, for_naive, task_naive, task_depend, task_prio, owner, task_domain, for_owner };
 
 inline Variant to_variant(const std::string &s)
 {
@@ -51,6 +51,11 @@ inline Variant to_variant(const std::string &s)
     if (s == "task_domain")
     {
         return Variant::task_domain;
+    }
+
+    if (s == "for_owner")
+    {
+        return Variant::for_owner;
     }
 
     throw std::invalid_argument("Unknown Variant: " + std::string(s));
