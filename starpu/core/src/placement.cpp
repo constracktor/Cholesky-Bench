@@ -8,7 +8,6 @@
 
 #include <cctype>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <map>
 #include <pthread.h>
@@ -81,9 +80,8 @@ int owner_worker(std::size_t row, std::size_t col)
     return d.workers[(col + row / domains.size()) % d.workers.size()];
 }
 
-void place_task(starpu_task *task, std::size_t row, std::size_t col)
+void place_task(starpu_task *task, std::size_t row)
 {
-    (void) col;
     // The mask is owned by this module and outlives every task.
     const Domain &d = domain_of_tile(row);
     task->workerids = const_cast<std::uint32_t *>(d.mask.data());

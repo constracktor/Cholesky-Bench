@@ -80,31 +80,29 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     (void) problem_size;
 #else
     std::size_t tile_size = problem_size / n_tiles;
+    // One thread per worker, bound to the worker's CPU, generates the tiles the worker owns.
+    std::vector<std::thread> threads;
+    for (int w = 0; w < placement::n_workers(); ++w)
     {
-        // One thread per worker, bound to the worker's CPU, generates the tiles the worker owns.
-        std::vector<std::thread> threads;
-        for (int w = 0; w < placement::n_workers(); ++w)
-        {
-            threads.emplace_back(
-                [&, w]
+        threads.emplace_back(
+            [&, w]
+            {
+                placement::bind_to_worker(w);
+                for (std::size_t i = 0; i < n_tiles; i++)
                 {
-                    placement::bind_to_worker(w);
-                    for (std::size_t i = 0; i < n_tiles; i++)
+                    for (std::size_t j = 0; j <= i; j++)
                     {
-                        for (std::size_t j = 0; j <= i; j++)
+                        if (placement::owner_worker(i, j) == w)
                         {
-                            if (placement::owner_worker(i, j) == w)
-                            {
-                                tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
-                            }
+                            tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
                         }
                     }
-                });
-        }
-        for (auto &t : threads)
-        {
-            t.join();
-        }
+                }
+            });
+    }
+    for (auto &t : threads)
+    {
+        t.join();
     }
 #endif
 
