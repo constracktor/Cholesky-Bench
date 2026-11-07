@@ -19,11 +19,8 @@ add_library(Cholesky::core ALIAS cholesky_core)
 file(GLOB_RECURSE header_files CONFIGURE_DEPENDS include/*.hpp)
 target_sources(cholesky_core PRIVATE ${header_files})
 
-# Threading + parallel-STL backend (std::async / std::execution::par).
+# Worker-pool backend (core/include/task_backend.hpp).
 target_link_libraries(cholesky_core PUBLIC Threads::Threads)
-if(TBB_FOUND)
-  target_link_libraries(cholesky_core PUBLIC TBB::tbb)
-endif()
 
 # Include directories
 target_include_directories(

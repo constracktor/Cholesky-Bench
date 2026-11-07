@@ -1,8 +1,8 @@
 #!/bin/bash
 # Usage: compile.sh
 #
-# Builds the pure-standard-library Cholesky benchmark (std::future tasking +
-# parallel std::for_each fork-join). No HPX runtime is involved.
+# Builds the pure-standard-library Cholesky benchmark (continuation-based tasking
+# and fork-join loops on a work-stealing thread pool). No HPX runtime is involved.
 #
 # CMake project options can be overridden via environment variables
 # (defaults match the project's CMakeLists.txt defaults):
@@ -44,10 +44,9 @@ fi
 ################################################################################
 # Configurations
 #
-# The standard-library build only needs a C++20 compiler, a sequential BLAS,
-# and (for libstdc++) Intel TBB to back std::execution::par. On the project's
-# clusters these come from Spack/modules; elsewhere the find_package() calls in
-# CMake pick up system installs.
+# The standard-library build only needs a C++20 compiler and a sequential BLAS.
+# On the project's clusters these come from Spack/modules; elsewhere the
+# find_package() calls in CMake pick up system installs.
 ################################################################################
 if command -v spack &>/dev/null; then
   echo "Spack command found. Loading libraries."
@@ -59,20 +58,18 @@ if command -v spack &>/dev/null; then
     export CC=gcc
     export CXX=g++
     spack load openblas@0.3.28%gcc@14.2.0 threads=none
-    spack load intel-tbb%gcc@14.2.0 2>/dev/null || spack load tbb%gcc@14.2.0 2>/dev/null || true
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
     module load gcc/14.2.0
     export CC=gcc
     export CXX=g++
     spack load openblas@0.3.28%gcc@14.2.0 arch=linux-almalinux9-zen3 threads=none
-    spack load intel-tbb%gcc@14.2.0 2>/dev/null || spack load tbb%gcc@14.2.0 2>/dev/null || true
 
   else
     echo "Hostname is $HOSTNAME — no action taken (relying on system toolchain)."
   fi
 else
-  echo "Spack command not found. Relying on the system toolchain / BLAS / TBB."
+  echo "Spack command not found. Relying on the system toolchain / BLAS."
 fi
 
 ################################################################################

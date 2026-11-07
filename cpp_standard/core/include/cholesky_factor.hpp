@@ -43,14 +43,14 @@ inline Variant to_variant(const std::string &s)
 }
 
 /**
- * @brief Right-looking tiled Cholesky using std::shared_future<vector> for dependency tracking.
+ * @brief Right-looking tiled Cholesky using std_backend::future<vector> for dependency tracking.
  * @param variant      choose between async_future or sync_future
  * @param ft_tiles     futurized flat lower-triangular tile data (mutated in-place)
  */
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles);
 
 /**
- * @brief Right-looking tiled Cholesky using fork-join (parallel std::for_each).
+ * @brief Right-looking tiled Cholesky using fork-join (std_backend::parallel_for).
  * @param variant   choose between loop_one and loop_two
  * @param tiles     flat lower-triangular tile data (mutated in-place)
  */

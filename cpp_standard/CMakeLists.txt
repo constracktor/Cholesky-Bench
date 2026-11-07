@@ -13,7 +13,7 @@ option(
   OFF)
 option(
   DISABLE_COMPUTATION
-  "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps the std::future task graph and parallel loops intact so scheduling overhead can be measured in isolation"
+  "Replace all BLAS/LAPACK calls and tile generation with no-ops; keeps the task graph and parallel loops intact so scheduling overhead can be measured in isolation"
   OFF)
 if(ENABLE_VALIDATION AND DISABLE_COMPUTATION)
   message(
@@ -64,20 +64,8 @@ if(BUILD_CORE)
     endif()
   endif()
 
-  # std::async tasking needs a threading library; the parallel std::for_each
-  # backend in libstdc++ is implemented on top of Intel TBB and must be linked
-  # explicitly. (libc++/MSVC do not require TBB; there the find below is a
-  # best-effort no-op.)
+  # The worker-pool backend needs a threading library.
   find_package(Threads REQUIRED)
-  find_package(TBB QUIET)
-  if(TBB_FOUND)
-    message(STATUS "TBB found - parallel std algorithms will use it")
-  else()
-    message(
-      STATUS
-        "TBB not found - parallel std::for_each may fall back to sequential "
-        "execution (libstdc++ requires TBB for std::execution::par).")
-  endif()
 
   add_subdirectory(core)
 

@@ -18,8 +18,9 @@
 //
 // Tasking runs on a fixed pool of worker threads (one per core). dataflow() is continuation based: a task counts its
 // unsatisfied inputs and is pushed to a ready queue by whichever thread finishes the last one, so no worker ever
-// blocks on a future and no thread is created per task. Every worker owns a deque; it pops its own newest task and
-// steals the oldest task of another worker when it runs dry.
+// blocks on a future and no thread is created per task. Every worker owns two deques (normal and high priority); it
+// pops its own newest task and steals the oldest task of another worker when it runs dry, workers of its own NUMA
+// domain first. Tasks are queued on the owner of the tile they write (pool::owner).
 //
 // parallel_for (fork-join with dynamic chunk claiming; the caller takes part in the loop) runs on the same pool.
 
@@ -28,7 +29,6 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <deque>
 #include <filesystem>
 #include <map>
@@ -260,7 +260,7 @@ class pool
 #endif
     }
 
-    // Pop from queue level @p q of worker @p id: own tasks newest first, other workers' tasks oldest first.
+    // Pop the newest task from queue level @p q of worker @p id.
     task_base *pop_local(std::size_t id, int q)
     {
         worker &w = *workers_[id];
@@ -280,6 +280,7 @@ class pool
         return t;
     }
 
+    // Take the oldest task from queue level @p q of worker @p v (gives up when its lock is busy).
     task_base *steal_from(std::size_t v, int q)
     {
         worker &w = *workers_[v];
@@ -458,8 +459,6 @@ struct state_base
         }
     }
 
-    bool is_ready() const noexcept { return ready.load(std::memory_order_acquire) != 0; }
-
     void wait() const
     {
         while (ready.load(std::memory_order_acquire) == 0)
@@ -493,8 +492,6 @@ class future
     { }
 
     bool valid() const noexcept { return s_ != nullptr; }
-
-    bool is_ready() const noexcept { return s_ && s_->is_ready(); }
 
     void wait() const { s_->wait(); }
 
@@ -593,13 +590,15 @@ struct dataflow_task final : task_base
 }  // namespace detail
 
 /**
- * @brief std::library analogue of hpx::dataflow.
+ * @brief std::library analogue of hpx::dataflow, placed by tile.
  *
- * Schedules @p f(args...) once every future among @p args is ready. The futures are forwarded to the callable like
- * any other argument (they are ready when it runs, so get() does not block). Never blocks the caller.
+ * Schedules @p f(args...) once every future among @p args is ready; the task is then queued on the owner of tile
+ * (row, col), and @p high marks critical-path tasks (ready ones run before ordinary ones). The futures are forwarded
+ * to the callable like any other argument (they are ready when it runs, so get() does not block). Never blocks the
+ * caller.
  */
-template <bool High, typename F, typename... Args>
-auto dataflow_impl(int hint, F &&f, Args &&...args)
+template <typename F, typename... Args>
+auto dataflow_on_tile(std::size_t row, std::size_t col, bool high, F &&f, Args &&...args)
 {
     using Result = std::invoke_result_t<std::decay_t<F> &, std::decay_t<Args> &&...>;
     using stored = std::conditional_t<std::is_void_v<Result>, std::monostate, Result>;
@@ -609,8 +608,8 @@ auto dataflow_impl(int hint, F &&f, Args &&...args)
     auto st = std::make_shared<detail::state<stored>>();
     auto *t = new detail::dataflow_task<std::decay_t<F>, Tuple, Result>(
         std::decay_t<F>(std::forward<F>(f)), Tuple(std::forward<Args>(args)...), st);
-    t->high_priority = High;
-    t->hint = hint;
+    t->high_priority = high;
+    t->hint = detail::pool::instance().owner(row, col);
     unsigned slot = 0;
     std::apply(
         [&](auto &...a)
@@ -635,35 +634,6 @@ auto dataflow_impl(int hint, F &&f, Args &&...args)
         detail::pool::instance().submit(t);
     }
     return future<Result>(std::move(st));
-}
-
-template <typename F, typename... Args>
-auto dataflow(F &&f, Args &&...args)
-{
-    return dataflow_impl<false>(-1, std::forward<F>(f), std::forward<Args>(args)...);
-}
-
-/**
- * @brief dataflow() for tasks on the critical path: ready tasks of this kind are run before ordinary ones.
- */
-template <typename F, typename... Args>
-auto dataflow_high_priority(F &&f, Args &&...args)
-{
-    return dataflow_impl<true>(-1, std::forward<F>(f), std::forward<Args>(args)...);
-}
-
-/**
- * @brief dataflow() whose task is queued on the owner of tile (row, col) once ready; @p high marks critical-path tasks.
- */
-template <typename F, typename... Args>
-auto dataflow_on_tile(std::size_t row, std::size_t col, bool high, F &&f, Args &&...args)
-{
-    const int hint = detail::pool::instance().owner(row, col);
-    if (high)
-    {
-        return dataflow_impl<true>(hint, std::forward<F>(f), std::forward<Args>(args)...);
-    }
-    return dataflow_impl<false>(hint, std::forward<F>(f), std::forward<Args>(args)...);
 }
 
 /**

@@ -242,7 +242,7 @@ void gemm(const vector &A,
 
 //////////////////////////////////////////////////////////
 // Void-future variants: each wrapper waits on its dependency futures (passed in
-// by the std::async-based dataflow) and then runs the in-place BLAS call. They
+// by dataflow, already ready) and then runs the in-place BLAS call. They
 // delegate to the plain BLAS wrappers above, so DISABLE_COMPUTATION no-op
 // handling is automatic; no extra preprocessor machinery here.
 

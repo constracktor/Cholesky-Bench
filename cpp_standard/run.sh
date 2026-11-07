@@ -19,9 +19,9 @@ module load gcc/14.2.0
 # Resolve directory where the script is located
 SCRIPT_DIR="$(pwd)"
 
-# --threads sizes both the std::future worker pool and the parallel-STL
-# fork-join (mirrors HPX's --hpx:threads=128), so the comparison runs on the
-# same thread budget as the HPX benchmark.
+# The worker pool has one thread per core (128 here, like HPX's
+# --hpx:threads=128), so the comparison runs on the same thread budget as the
+# HPX benchmark.
 
 # Run executable
 srun --cpu-bind=cores "$SCRIPT_DIR/build/cholesky_std" \
