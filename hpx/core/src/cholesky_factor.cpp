@@ -218,74 +218,40 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
                     });
 
                 // Collapsed triangular (m, n) iteration space, scheduled dynamically
-                {
-                    const std::size_t r = n_tiles - k - 1;
-                    const std::size_t P = r * (r + 1) / 2;
-                    hpx::experimental::for_loop(
-                        hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1)),
-                        std::size_t(0),
-                        P,
-                        [&](std::size_t p)
-                        {
-                            std::size_t t = static_cast<std::size_t>((std::sqrt(8.0 * double(p) + 1.0) - 1.0) / 2.0);
-                            while (t * (t + 1) / 2 > p)
-                            {
-                                --t;
-                            }
-                            while ((t + 1) * (t + 2) / 2 <= p)
-                            {
-                                ++t;
-                            }
-                            const std::size_t m = k + 1 + t;
-                            const std::size_t n = k + 1 + (p - t * (t + 1) / 2);
-                            if (n == m)
-                            {
-                                syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-                            }
-                            else
-                            {
-                                gemm(tiles[m * n_tiles + k],
-                                     tiles[n * n_tiles + k],
-                                     tiles[m * n_tiles + n],
-                                     N,
-                                     N,
-                                     N,
-                                     Blas_no_trans,
-                                     Blas_trans);
-                            }
-                        });
-                    continue;
-                }
+                const std::size_t r = n_tiles - k - 1;
+                const std::size_t P = r * (r + 1) / 2;
                 hpx::experimental::for_loop(
                     par_dyn,
-                    k + 1,
-                    n_tiles,
-                    [&](std::size_t m)
+                    std::size_t(0),
+                    P,
+                    [&](std::size_t p)
                     {
-                        hpx::experimental::for_loop(
-                            hpx::execution::par,
-                            k + 1,
-                            m + 1,
-                            [&](std::size_t n)
-                            {
-                                if (n == m)
-                                {
-                                    // SYRK: A = A - B * B^T
-                                    syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-                                }
-                                else
-                                {
-                                    // GEMM: C = C - A * B^T
-                                    gemm(tiles[m * n_tiles + k],
-                                         tiles[n * n_tiles + k],
-                                         tiles[m * n_tiles + n],
-                                         N,
-                                         N,
-                                         N,
-                                         Blas_no_trans,
-                                         Blas_trans);
-                                }
-                            });
+                        std::size_t t = static_cast<std::size_t>((std::sqrt(8.0 * double(p) + 1.0) - 1.0) / 2.0);
+                        while (t * (t + 1) / 2 > p)
+                        {
+                            --t;
+                        }
+                        while ((t + 1) * (t + 2) / 2 <= p)
+                        {
+                            ++t;
+                        }
+                        const std::size_t m = k + 1 + t;
+                        const std::size_t n = k + 1 + (p - t * (t + 1) / 2);
+                        if (n == m)
+                        {
+                            syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
+                        }
+                        else
+                        {
+                            gemm(tiles[m * n_tiles + k],
+                                 tiles[n * n_tiles + k],
+                                 tiles[m * n_tiles + n],
+                                 N,
+                                 N,
+                                 N,
+                                 Blas_no_trans,
+                                 Blas_trans);
+                        }
                     });
             }
             break;
@@ -308,7 +274,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
         dep_tiles[k * n_tiles + k] =
             df(true, k, k, potrf_f, "cholesky_potrf", dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
 
-        submit_loop(!sync,
+        submit_loop(false,
                     k + 1,
                     n_tiles,
                     [&](std::size_t m)
@@ -330,7 +296,7 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
                                Blas_right);
                     });
 
-        submit_loop(!sync,
+        submit_loop(false,
                     k + 1,
                     n_tiles,
                     [&](std::size_t m)

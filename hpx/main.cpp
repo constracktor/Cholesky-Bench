@@ -124,8 +124,8 @@ int main(int argc, char *argv[])
 #endif
                 }
                 ///////////////////////////////////////////////////////////////////////////
-                // void-futures: tile data comes from gen_tiled_matrix (same as the
-                // loop variants); only the dependency-future matrix is variant-specific.
+                // void-futures: tile data comes from gen_tiled_matrix (generated on the
+                // owner threads); only the dependency-future matrix is variant-specific.
                 {
                     auto tiles = gen_tiled_matrix(size, n_tiles, true);
                     auto dep_tiles = gen_void_tiled_matrix(n_tiles);
