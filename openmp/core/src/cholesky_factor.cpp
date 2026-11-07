@@ -14,6 +14,10 @@
 #include <iostream>
 #include <memory>
 #include <omp.h>
+#include <sched.h>
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
 
 // Trailing-update schedule:
 // libgomp through GCC 14.x rejects schedule(dynamic, ...) on a
@@ -23,6 +27,34 @@
 #else
 #define CHOL_OMP_FOR_TRAILING_COLLAPSE() _Pragma("omp for collapse(2)")
 #endif
+
+namespace
+{
+// Portable spin-wait hint
+inline void cpu_relax()
+{
+#if defined(__x86_64__) || defined(__i386__)
+    _mm_pause();
+#elif defined(__aarch64__)
+    asm volatile("yield" ::: "memory");
+#endif
+}
+
+// Spin until flag is set; yield the CPU periodically so oversubscribed runs (threads > cores) make progress
+inline void spin_wait(const std::atomic<char> &f)
+{
+    unsigned spins = 0;
+    while (!f.load(std::memory_order_acquire))
+    {
+        cpu_relax();
+        if (++spins >= 4096)
+        {
+            spins = 0;
+            sched_yield();
+        }
+    }
+}
+}  // namespace
 
 namespace cpu
 {
@@ -314,13 +346,7 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 // (same map as the tile generation), readiness of panel tiles via atomic flags.
                 // flag[m*n_tiles+k] == 1: tile (m,k) is final (potrf for m==k, trsm otherwise)
                 auto flag = make_flags(n_tiles * n_tiles);
-                auto wait = [&](std::size_t idx)
-                {
-                    while (!flag[idx].load(std::memory_order_acquire))
-                    {
-                        __builtin_ia32_pause();
-                    }
-                };
+                auto wait = [&](std::size_t idx) { spin_wait(flag[idx]); };
 #pragma omp parallel
                 {
                     const std::size_t nt = omp_get_num_threads();
@@ -393,11 +419,9 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 auto flag = make_flags(n_tiles * n_tiles);
                 auto wait = [&](std::size_t idx)
                 {
-                    while (!flag[idx].load(std::memory_order_acquire))
-                    {
-#pragma omp taskyield
-                        __builtin_ia32_pause();
-                    }
+                    // Safe because numa_domains() guarantees >= 2 threads per team: another thread of the team
+                    // keeps executing the tasks (taskyield is not reliable in libgomp).
+                    spin_wait(flag[idx]);
                 };
                 const int nt = omp_get_max_threads();
                 const int D = static_cast<int>(numa_domains(nt));

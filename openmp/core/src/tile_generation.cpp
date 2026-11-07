@@ -68,8 +68,10 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 
 std::size_t numa_domains(std::size_t n_threads)
 {
-    // Assume 8 NUMA domains, threads bound in order (OMP_PLACES=cores, OMP_PROC_BIND=close)
-    return (n_threads % 8 == 0 && n_threads >= 8) ? 8 : 1;
+    // Assume 8 NUMA domains, threads bound in order (OMP_PLACES=cores, OMP_PROC_BIND=close).
+    // Require >= 2 threads per domain (task_domain needs a worker besides the task-creating thread).
+    constexpr std::size_t domains = 8;
+    return (n_threads % domains == 0 && n_threads / domains >= 2) ? domains : 1;
 }
 
 std::size_t tile_owner(std::size_t row, std::size_t col, std::size_t n_threads)
