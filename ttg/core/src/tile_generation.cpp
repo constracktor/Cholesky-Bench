@@ -11,37 +11,97 @@
 #endif
 
 #if defined(__linux__)
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <string>
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
 
 namespace
 {
-// Spread the pages of the tile storage round-robin over all NUMA nodes while
-// the tiles are generated (the pages are first touched by the generating
+#if defined(__linux__) && defined(SYS_set_mempolicy) && !defined(DISABLE_COMPUTATION)
+// Highest online NUMA node id + 1, parsed from a range list such as "0-7" or
+// "0,2-3"; 0 if it cannot be determined.
+unsigned long online_node_bits()
+{
+    std::ifstream f("/sys/devices/system/node/online");
+    std::string list;
+    if (!std::getline(f, list))
+    {
+        return 0;
+    }
+    unsigned long max_node = 0;
+    bool found = false;
+    const char *p = list.c_str();
+    while (*p)
+    {
+        if (!std::isdigit(static_cast<unsigned char>(*p)))
+        {
+            ++p;
+            continue;
+        }
+        char *end;
+        unsigned long hi = std::strtoul(p, &end, 10);
+        p = end;
+        if (*p == '-')
+        {
+            hi = std::strtoul(p + 1, &end, 10);
+            p = end;
+        }
+        max_node = hi > max_node ? hi : max_node;
+        found = true;
+    }
+    return found ? max_node + 1 : 0;
+}
+
+// Spread the pages of the tile storage round-robin over all online NUMA nodes
+// while the tiles are generated (the pages are first touched by the generating
 // thread). Without this, every tile lives on the NUMA node of the generating
 // thread and the memory-bound tasks of all other NUMA domains compete for one
-// node's memory bandwidth. Uses the raw syscall, so no libnuma is required;
-// failure (non-NUMA or restricted systems) is silently ignored.
+// node's memory bandwidth. Uses the raw syscall, so no libnuma is required.
+// The nodemask is sized from the online node count; if that is unknown or the
+// call fails (non-NUMA or restricted systems) interleaving is silently skipped.
 struct InterleavePolicy
 {
-#if defined(__linux__) && defined(SYS_set_mempolicy)
-    static constexpr int mpol_default = 0;
+    constexpr static int mpol_default = 0;
     constexpr static int mpol_interleave = 3;
 
     InterleavePolicy()
     {
-        unsigned long mask[16];
-        for (auto &m : mask)
+        const unsigned long bits = online_node_bits();
+        constexpr unsigned long word_bits = 8 * sizeof(unsigned long);
+        if (bits == 0 || bits > 1024)
         {
-            m = ~0UL;
+            return;
         }
-        syscall(SYS_set_mempolicy, mpol_interleave, mask, 1024UL);
+        std::vector<unsigned long> mask((bits + word_bits - 1) / word_bits, 0UL);
+        for (unsigned long n = 0; n < bits; n++)
+        {
+            mask[n / word_bits] |= 1UL << (n % word_bits);
+        }
+        // The kernel reads maxnode - 1 bits of the mask.
+        active = syscall(SYS_set_mempolicy, mpol_interleave, mask.data(), bits + 1) == 0;
     }
 
-    ~InterleavePolicy() { syscall(SYS_set_mempolicy, mpol_default, nullptr, 0UL); }
-#endif
+    ~InterleavePolicy()
+    {
+        if (active)
+        {
+            syscall(SYS_set_mempolicy, mpol_default, nullptr, 0UL);
+        }
+    }
+
+    InterleavePolicy(const InterleavePolicy &) = delete;
+    InterleavePolicy &operator=(const InterleavePolicy &) = delete;
+
+    bool active = false;
 };
+#else
+struct InterleavePolicy
+{ };
+#endif
 }  // namespace
 
 std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, std::size_t n_tiles)

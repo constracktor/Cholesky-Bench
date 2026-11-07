@@ -10,6 +10,7 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <ttg.h>
 #include <ttg/serialization/std/tuple.h>
 #include <ttg/serialization/std/vector.h>
@@ -349,25 +350,30 @@ double right_looking_cholesky_tiled_ttg(Tiled_vector_matrix &tiles)
     // (m, n, k) = (row, column, step).
     const long nt = static_cast<long>(n_tiles);
     auto cube = [](long x) { return x * x * x; };
-    op_potrf->set_priomap(
-        [nt, cube](const Key1 &key) { return static_cast<int>(cube(nt - static_cast<long>(key[0]))); });
+    // Saturate instead of overflowing int for very large tile counts.
+    auto prio = [](long v)
+    {
+        constexpr long hi = std::numeric_limits<int>::max(), lo = std::numeric_limits<int>::min();
+        return static_cast<int>(v > hi ? hi : (v < lo ? lo : v));
+    };
+    op_potrf->set_priomap([nt, cube, prio](const Key1 &key) { return prio(cube(nt - static_cast<long>(key[0]))); });
     op_trsm->set_priomap(
-        [nt, cube](const Key2 &key)
+        [nt, cube, prio](const Key2 &key)
         {
             const long m = key[0], k = key[1];
-            return static_cast<int>(cube(nt - m) + 3 * (2 * nt - k - m - 1) * (m - k));
+            return prio(cube(nt - m) + 3 * (2 * nt - k - m - 1) * (m - k));
         });
     op_syrk->set_priomap(
-        [nt, cube](const Key2 &key)
+        [nt, cube, prio](const Key2 &key)
         {
             const long k = key[0], m = key[1];  // SYRK(k, m): step k, row m
-            return static_cast<int>(cube(nt - m) + 3 * (m - k));
+            return prio(cube(nt - m) + 3 * (m - k));
         });
     op_gemm->set_priomap(
-        [nt, cube](const Key3 &key)
+        [nt, cube, prio](const Key3 &key)
         {
             const long m = key[0], n = key[1], k = key[2];
-            return static_cast<int>(cube(nt - m) + 3 * (2 * nt - m - n - 3) * (m - n) + 6 * (m - k));
+            return prio(cube(nt - m) + 3 * (2 * nt - m - n - 3) * (m - n) + 6 * (m - k));
         });
 
     auto connected = ttg::make_graph_executable(op_load.get());
