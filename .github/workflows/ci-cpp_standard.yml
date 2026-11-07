@@ -33,17 +33,16 @@ jobs:
           spack compiler find
           spack external find
           spack install --no-check-signature openblas@0.3.28 threads=none
-          spack install --no-check-signature intel-tbb
 
       - name: Push to binary cache
         run: |
           spack buildcache push --base-image ubuntu:24.04 --unsigned --update-index \
-            ci-buildcache openblas intel-tbb
+            ci-buildcache openblas
 
       - name: Configure, build and validate
         working-directory: cpp_standard
         run: |
-          eval $(spack load --sh openblas@0.3.28 threads=none intel-tbb)
+          eval $(spack load --sh openblas@0.3.28 threads=none)
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_VALIDATION=ON

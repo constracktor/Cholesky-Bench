@@ -29,6 +29,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <filesystem>
 #include <map>
@@ -105,8 +106,24 @@ class pool
     static pool &instance()
     {
         // Never destroyed: avoids shutdown-order problems; the workers die with the process.
-        static pool *p = new pool(std::max(1u, std::thread::hardware_concurrency()));
+        static pool *p = new pool(default_threads());
         return *p;
+    }
+
+    /// Worker count: CHOLESKY_THREADS if set to a positive number, else the CPUs in the affinity mask of the process
+    /// (hardware_concurrency when that is unavailable).
+    static unsigned default_threads()
+    {
+        if (const char *env = std::getenv("CHOLESKY_THREADS"))
+        {
+            const long v = std::strtol(env, nullptr, 10);
+            if (v > 0)
+            {
+                return static_cast<unsigned>(v);
+            }
+        }
+        const std::size_t n = allowed_cpus().size();
+        return n > 0 ? static_cast<unsigned>(n) : std::max(1u, std::thread::hardware_concurrency());
     }
 
     std::size_t size() const noexcept { return workers_.size(); }
@@ -127,6 +144,8 @@ class pool
             w.queue[q].push_back(t);
             w.count[q].store(w.queue[q].size(), std::memory_order_relaxed);
         }
+        // Order the push before the searching_ load in wake_one (pairs with the fence in the sleep path of loop()).
+        std::atomic_thread_fence(std::memory_order_seq_cst);
         wake_one();
     }
 
@@ -386,6 +405,7 @@ class pool
                     // the final scan means a concurrent submit() either is seen by that scan or sees the sleeper.
                     sleepers_.fetch_add(1, std::memory_order_seq_cst);
                     searching_.fetch_sub(1, std::memory_order_seq_cst);
+                    std::atomic_thread_fence(std::memory_order_seq_cst);
                     const unsigned e = epoch_.load(std::memory_order_seq_cst);
                     t = try_pop(id, rng);
                     if (t == nullptr)
@@ -397,6 +417,7 @@ class pool
                     {
                         continue;
                     }
+                    wake_one();  // like the spin path: if no searcher is left, make sure other tasks get picked up
                 }
             }
             t->run();
