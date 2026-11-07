@@ -33,9 +33,6 @@ void place_task(starpu_task *task, std::size_t row);
 /// Bind the calling thread to the CPU of @p worker.
 void bind_to_worker(int worker);
 
-/// Number of CPU workers.
-int n_workers();
-
 }  // namespace placement
 
 #endif  // end of PLACEMENT_H

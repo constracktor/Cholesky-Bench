@@ -1,6 +1,6 @@
-set(SOURCE_FILES src/tile_generation.cpp src/functions.cpp
-                 src/cholesky_factor.cpp src/adapter_cblas_fp64.cpp
-                 src/placement.cpp)
+set(SOURCE_FILES
+    src/tile_generation.cpp src/functions.cpp src/cholesky_factor.cpp
+    src/adapter_cblas_fp64.cpp src/placement.cpp)
 
 if(ENABLE_VALIDATION)
   list(APPEND SOURCE_FILES src/validate.cpp)

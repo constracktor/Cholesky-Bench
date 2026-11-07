@@ -16,6 +16,7 @@
 #include <iostream>
 #include <starpu.h>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -73,8 +74,12 @@ int main(int argc, char *argv[])
     // STARPU_SCHED environment variable (default: lws).
     // The submitting (main) thread gets a core of its own: with all cores occupied by workers it is starved and
     // task submission becomes the bottleneck. StarPU then uses one worker less than the cores it may use.
+    // Only done for larger thread counts (with few workers it would leave none or too few).
     // This default can be overridden via the environment (STARPU_MAIN_THREAD_BIND).
-    setenv("STARPU_MAIN_THREAD_BIND", "1", 0);
+    if (nthreads <= 0 ? std::thread::hardware_concurrency() >= 8 : nthreads >= 8)
+    {
+        setenv("STARPU_MAIN_THREAD_BIND", "1", 0);
+    }
     starpu_conf conf;
     starpu_conf_init(&conf);
     conf.ncuda = 0;

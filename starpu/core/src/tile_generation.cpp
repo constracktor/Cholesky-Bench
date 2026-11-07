@@ -82,7 +82,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     std::size_t tile_size = problem_size / n_tiles;
     // One thread per worker, bound to the worker's CPU, generates the tiles the worker owns.
     std::vector<std::thread> threads;
-    for (int w = 0; w < placement::n_workers(); ++w)
+    for (int w = 0; w < static_cast<int>(starpu_cpu_worker_get_count()); ++w)
     {
         threads.emplace_back(
             [&, w]

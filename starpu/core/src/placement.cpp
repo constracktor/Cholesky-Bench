@@ -6,6 +6,7 @@
 
 #include "placement.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
@@ -44,18 +45,19 @@ int node_of_cpu(int cpu)
     return 0;
 }
 
-const Domain &domain_of_tile(std::size_t row) { return domains[row % domains.size()]; }
+const Domain &domain_of_tile(std::size_t row) { return domains[row % domains.size()]; }  // domains is never empty
 }  // namespace
 
 void init()
 {
-    const int n = starpu_cpu_worker_get_count();
+    const int n = std::max(static_cast<int>(starpu_cpu_worker_get_count()), 1);
     std::map<int, std::vector<int>> by_node;
     cpu_of_worker.assign(n, 0);
     for (int w = 0; w < n; ++w)
     {
-        cpu_of_worker[w] = starpu_worker_get_bindid(w);
-        by_node[node_of_cpu(cpu_of_worker[w])].push_back(w);
+        const int id = starpu_worker_get_bindid(w);
+        cpu_of_worker[w] = id;
+        by_node[id >= 0 ? node_of_cpu(id) : 0].push_back(w);  // node 0 without NUMA info
     }
     const std::size_t words = (static_cast<std::size_t>(n) + 31) / 32;
     domains.clear();
@@ -71,8 +73,6 @@ void init()
         domains.push_back(std::move(d));
     }
 }
-
-int n_workers() { return static_cast<int>(cpu_of_worker.size()); }
 
 int owner_worker(std::size_t row, std::size_t col)
 {

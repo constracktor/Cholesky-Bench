@@ -23,8 +23,8 @@ export STARPU_SILENT=1
 # For n_tiles >= 512 the number of submitted tasks (~n^3/6) becomes huge; throttle submission to bound memory:
 # export STARPU_LIMIT_MAX_SUBMITTED_TASKS=100000
 # export STARPU_LIMIT_MIN_SUBMITTED_TASKS=80000
-# The submitting main thread gets a core of its own (main.cpp sets this by default; one worker less is used):
-export STARPU_MAIN_THREAD_BIND=1
+# main.cpp reserves a core for the submitting main thread by default when >= 8 threads are used
+# (set STARPU_MAIN_THREAD_BIND=0 to disable).
 
 # Resolve directory where the script is located
 SCRIPT_DIR="$(pwd)"
