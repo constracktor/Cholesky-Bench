@@ -50,7 +50,7 @@ if command -v spack &>/dev/null; then
     module load gcc/14.2.0
     export CC=gcc
     export CXX=g++
-    spack load hpx@1.11.0%gcc@14.2.0 malloc=jemalloc
+    spack load hpx@2.0.0%gcc@14.2.0 malloc=jemalloc
     spack load openblas@0.3.28%gcc@14.2.0 threads=none
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
