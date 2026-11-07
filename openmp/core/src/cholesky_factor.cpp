@@ -7,13 +7,13 @@
 #include "cholesky_factor.hpp"
 
 #include "adapter_cblas_fp64.hpp"
+#include "tile_generation.hpp"
+#include <atomic>
 #include <cmath>
 #include <cstddef>
-#include <atomic>
 #include <iostream>
 #include <memory>
 #include <omp.h>
-#include "tile_generation.hpp"
 
 // Trailing-update schedule:
 // libgomp through GCC 14.x rejects schedule(dynamic, ...) on a
@@ -31,6 +31,17 @@ namespace cpu
 inline std::size_t isqrt_exact(std::size_t x)
 {
     return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
+}
+
+// Per-tile readiness flags, all cleared
+inline std::unique_ptr<std::atomic<char>[]> make_flags(std::size_t n)
+{
+    std::unique_ptr<std::atomic<char>[]> flag(new std::atomic<char>[n]);
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        flag[i].store(0, std::memory_order_relaxed);
+    }
+    return flag;
 }
 
 void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
@@ -298,67 +309,61 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
             }
             break;
         case Variant::owner:
-        {
-            // Owner-computes data flow: every tile is updated only by its owner thread
-            // (same map as the tile generation), readiness of panel tiles via atomic flags.
-            // flag[m*n_tiles+k] == 1: tile (m,k) is final (potrf for m==k, trsm otherwise)
-            std::unique_ptr<std::atomic<char>[]> flag(new std::atomic<char>[n_tiles * n_tiles]);
-            for (std::size_t i = 0; i < n_tiles * n_tiles; ++i)
             {
-                flag[i].store(0, std::memory_order_relaxed);
-            }
-            auto wait = [&](std::size_t idx)
-            {
-                while (!flag[idx].load(std::memory_order_acquire))
+                // Owner-computes data flow: every tile is updated only by its owner thread
+                // (same map as the tile generation), readiness of panel tiles via atomic flags.
+                // flag[m*n_tiles+k] == 1: tile (m,k) is final (potrf for m==k, trsm otherwise)
+                auto flag = make_flags(n_tiles * n_tiles);
+                auto wait = [&](std::size_t idx)
                 {
-                    __builtin_ia32_pause();
-                }
-            };
-#pragma omp parallel
-            {
-                const std::size_t nt = omp_get_num_threads();
-                const std::size_t tid = omp_get_thread_num();
-                auto mine = [&](std::size_t m, std::size_t n) { return tile_owner(m, n, nt) == tid; };
-                auto update = [&](std::size_t k, std::size_t m, std::size_t n)
-                {
-                    wait(m * n_tiles + k);
-                    if (n == m)
+                    while (!flag[idx].load(std::memory_order_acquire))
                     {
-                        syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-                    }
-                    else
-                    {
-                        wait(n * n_tiles + k);
-                        gemm(tiles[m * n_tiles + k],
-                             tiles[n * n_tiles + k],
-                             tiles[m * n_tiles + n],
-                             N,
-                             N,
-                             N,
-                             Blas_no_trans,
-                             Blas_trans);
+                        __builtin_ia32_pause();
                     }
                 };
-                for (std::size_t k = 0; k < n_tiles; ++k)
+#pragma omp parallel
                 {
-                    // Panel k
-                    if (mine(k, k))
+                    const std::size_t nt = omp_get_num_threads();
+                    const std::size_t tid = omp_get_thread_num();
+                    auto mine = [&](std::size_t m, std::size_t n) { return tile_owner(m, n, nt) == tid; };
+                    auto update = [&](std::size_t k, std::size_t m, std::size_t n)
                     {
-                        potrf(tiles[k * n_tiles + k], N);
-                        flag[k * n_tiles + k].store(1, std::memory_order_release);
-                    }
-                    for (std::size_t m = k + 1; m < n_tiles; ++m)
-                    {
-                        if (mine(m, k))
+                        wait(m * n_tiles + k);
+                        if (n == m)
                         {
-                            wait(k * n_tiles + k);
-                            trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
-                            flag[m * n_tiles + k].store(1, std::memory_order_release);
+                            syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
                         }
-                    }
-                    // Trailing update of step k: next panel column first (look-ahead)
-                    if (k + 1 < n_tiles)
+                        else
+                        {
+                            wait(n * n_tiles + k);
+                            gemm(tiles[m * n_tiles + k],
+                                 tiles[n * n_tiles + k],
+                                 tiles[m * n_tiles + n],
+                                 N,
+                                 N,
+                                 N,
+                                 Blas_no_trans,
+                                 Blas_trans);
+                        }
+                    };
+                    for (std::size_t k = 0; k < n_tiles; ++k)
                     {
+                        // Panel k
+                        if (mine(k, k))
+                        {
+                            potrf(tiles[k * n_tiles + k], N);
+                            flag[k * n_tiles + k].store(1, std::memory_order_release);
+                        }
+                        for (std::size_t m = k + 1; m < n_tiles; ++m)
+                        {
+                            if (mine(m, k))
+                            {
+                                wait(k * n_tiles + k);
+                                trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                                flag[m * n_tiles + k].store(1, std::memory_order_release);
+                            }
+                        }
+                        // Trailing update of step k: next panel column first (look-ahead)
                         for (std::size_t m = k + 1; m < n_tiles; ++m)
                         {
                             if (mine(m, k + 1))
@@ -366,118 +371,113 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                                 update(k, m, k + 1);
                             }
                         }
-                    }
-                    for (std::size_t m = k + 2; m < n_tiles; ++m)
-                    {
-                        for (std::size_t n = k + 2; n <= m; ++n)
+                        for (std::size_t m = k + 2; m < n_tiles; ++m)
                         {
-                            if (mine(m, n))
+                            for (std::size_t n = k + 2; n <= m; ++n)
                             {
-                                update(k, m, n);
+                                if (mine(m, n))
+                                {
+                                    update(k, m, n);
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        break;
+            break;
         case Variant::task_domain:
-        {
-            // One team per NUMA domain (nested parallel regions). Each team creates and runs the tasks of
-            // the tiles of its domain (row % D == d). Local dependencies use depend clauses, panel tiles of other
-            // domains are awaited through atomic flags before the dependent task is created.
-            std::unique_ptr<std::atomic<char>[]> flag(new std::atomic<char>[n_tiles * n_tiles]);
-            for (std::size_t i = 0; i < n_tiles * n_tiles; ++i)
             {
-                flag[i].store(0, std::memory_order_relaxed);
-            }
-            auto wait = [&](std::size_t idx)
-            {
-                while (!flag[idx].load(std::memory_order_acquire))
+                // One team per NUMA domain (nested parallel regions). Each team creates and runs the tasks of
+                // the tiles of its domain (row % D == d). Local dependencies use depend clauses, panel tiles of other
+                // domains are awaited through atomic flags before the dependent task is created.
+                auto flag = make_flags(n_tiles * n_tiles);
+                auto wait = [&](std::size_t idx)
                 {
+                    while (!flag[idx].load(std::memory_order_acquire))
+                    {
 #pragma omp taskyield
-                    __builtin_ia32_pause();
-                }
-            };
-            const int nt = omp_get_max_threads();
-            const int D = (nt % 8 == 0 && nt >= 8) ? 8 : 1;
-            const int per = nt / D;
-            omp_set_max_active_levels(2);
+                        __builtin_ia32_pause();
+                    }
+                };
+                const int nt = omp_get_max_threads();
+                const int D = static_cast<int>(numa_domains(nt));
+                const int per = nt / D;
+                omp_set_max_active_levels(2);
 #pragma omp parallel num_threads(D)
-            {
-                const std::size_t d = omp_get_thread_num();
+                {
+                    const std::size_t d = omp_get_thread_num();
 #pragma omp parallel num_threads(per)
 #pragma omp single
-                {
-                    for (std::size_t k = 0; k < n_tiles; ++k)
                     {
-                        std::vector<double> &tile_kk = tiles[k * n_tiles + k];
-                        const int hi = static_cast<int>(n_tiles - k);
-                        if (k % D == d)
+                        for (std::size_t k = 0; k < n_tiles; ++k)
                         {
+                            std::vector<double> &tile_kk = tiles[k * n_tiles + k];
+                            const int hi = static_cast<int>(n_tiles - k);
+                            if (k % D == d)
+                            {
 #pragma omp task depend(inout : tile_kk) priority(hi)
-                            {
-                                potrf(tiles[k * n_tiles + k], N);
-                                flag[k * n_tiles + k].store(1, std::memory_order_release);
-                            }
-                        }
-                        else
-                        {
-                            wait(k * n_tiles + k);
-                        }
-                        for (std::size_t m = k + 1; m < n_tiles; ++m)
-                        {
-                            if (m % D != d)
-                            {
-                                continue;
-                            }
-                            std::vector<double> &tile_mk = tiles[m * n_tiles + k];
-#pragma omp task depend(in : tile_kk) depend(inout : tile_mk) priority(hi - 1)
-                            {
-                                trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
-                                flag[m * n_tiles + k].store(1, std::memory_order_release);
-                            }
-                        }
-                        for (std::size_t m = k + 1; m < n_tiles; ++m)
-                        {
-                            if (m % D != d)
-                            {
-                                continue;
-                            }
-                            const std::vector<double> &tile_mk = tiles[m * n_tiles + k];
-                            std::vector<double> &tile_mm = tiles[m * n_tiles + m];
-                            const int syrk_prio = (m == k + 1) ? hi - 1 : 1;
-#pragma omp task depend(in : tile_mk) depend(inout : tile_mm) priority(syrk_prio)
-                            {
-                                syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
-                            }
-                            for (std::size_t n = k + 1; n < m; ++n)
-                            {
-                                if (n % D != d)
                                 {
-                                    wait(n * n_tiles + k);
+                                    potrf(tiles[k * n_tiles + k], N);
+                                    flag[k * n_tiles + k].store(1, std::memory_order_release);
                                 }
-                                const std::vector<double> &tile_nk = tiles[n * n_tiles + k];
-                                std::vector<double> &tile_mn = tiles[m * n_tiles + n];
-                                const int gemm_prio = (n == k + 1) ? hi - 1 : 0;
-#pragma omp task depend(in : tile_mk, tile_nk) depend(inout : tile_mn) priority(gemm_prio)
+                            }
+                            else
+                            {
+                                wait(k * n_tiles + k);
+                            }
+                            for (std::size_t m = k + 1; m < n_tiles; ++m)
+                            {
+                                if (m % D != d)
                                 {
-                                    gemm(tiles[m * n_tiles + k],
-                                         tiles[n * n_tiles + k],
-                                         tiles[m * n_tiles + n],
-                                         N,
-                                         N,
-                                         N,
-                                         Blas_no_trans,
-                                         Blas_trans);
+                                    continue;
+                                }
+                                std::vector<double> &tile_mk = tiles[m * n_tiles + k];
+#pragma omp task depend(in : tile_kk) depend(inout : tile_mk) priority(hi - 1)
+                                {
+                                    trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
+                                    flag[m * n_tiles + k].store(1, std::memory_order_release);
+                                }
+                            }
+                            for (std::size_t m = k + 1; m < n_tiles; ++m)
+                            {
+                                if (m % D != d)
+                                {
+                                    continue;
+                                }
+                                const std::vector<double> &tile_mk = tiles[m * n_tiles + k];
+                                std::vector<double> &tile_mm = tiles[m * n_tiles + m];
+                                const int syrk_prio = (m == k + 1) ? hi - 1 : 1;
+#pragma omp task depend(in : tile_mk) depend(inout : tile_mm) priority(syrk_prio)
+                                {
+                                    syrk(tiles[m * n_tiles + m], tiles[m * n_tiles + k], N);
+                                }
+                                for (std::size_t n = k + 1; n < m; ++n)
+                                {
+                                    if (n % D != d)
+                                    {
+                                        wait(n * n_tiles + k);
+                                    }
+                                    const std::vector<double> &tile_nk = tiles[n * n_tiles + k];
+                                    std::vector<double> &tile_mn = tiles[m * n_tiles + n];
+                                    const int gemm_prio = (n == k + 1) ? hi - 1 : 0;
+#pragma omp task depend(in : tile_mk, tile_nk) depend(inout : tile_mn) priority(gemm_prio)
+                                    {
+                                        gemm(tiles[m * n_tiles + k],
+                                             tiles[n * n_tiles + k],
+                                             tiles[m * n_tiles + n],
+                                             N,
+                                             N,
+                                             N,
+                                             Blas_no_trans,
+                                             Blas_trans);
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        break;
+            break;
         case Variant::for_owner:
 #pragma omp parallel
             {

@@ -92,9 +92,8 @@ int main(int argc, char *argv[])
                 values += std::string(";") + std::to_string(size / n_tiles);
                 values += std::string(";") + std::to_string(n_tiles);
                 ///////////////////////////////////////////////////////////////////////////
-                std::vector<std::string> modes = {
-                    "for_collapse", "for_naive", "task_naive", "task_depend", "task_prio", "owner", "task_domain", "for_owner"
-                };
+                std::vector<std::string> modes = { "for_collapse", "for_naive", "task_naive",  "task_depend",
+                                                   "task_prio",    "owner",     "task_domain", "for_owner" };
 
                 for (const auto &mode : modes)
                 {
@@ -102,7 +101,8 @@ int main(int argc, char *argv[])
                     {
                         continue;
                     }
-                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles, (mode == "owner" || mode == "for_owner") ? 1 : (mode == "task_domain" ? 2 : 0));
+                    auto tiled_matrix = gen_tiled_matrix(
+                        size, n_tiles, (mode == "owner" || mode == "for_owner") ? 1 : (mode == "task_domain" ? 2 : 0));
                     auto cholesky_cpu = cpu::cholesky(tiled_matrix, mode);
 
                     header += ";" + mode;

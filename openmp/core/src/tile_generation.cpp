@@ -66,10 +66,15 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 #endif
 }
 
+std::size_t numa_domains(std::size_t n_threads)
+{
+    // Assume 8 NUMA domains, threads bound in order (OMP_PLACES=cores, OMP_PROC_BIND=close)
+    return (n_threads % 8 == 0 && n_threads >= 8) ? 8 : 1;
+}
+
 std::size_t tile_owner(std::size_t row, std::size_t col, std::size_t n_threads)
 {
-    // Assume threads are bound in order (OMP_PLACES=cores, OMP_PROC_BIND=close) and 8 NUMA domains
-    const std::size_t D = (n_threads % 8 == 0 && n_threads >= 8) ? 8 : 1;
+    const std::size_t D = numa_domains(n_threads);
     const std::size_t per = n_threads / D;
     return (row % D) * per + (col + row / D) % per;
 }
@@ -85,52 +90,41 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
 #ifdef DISABLE_COMPUTATION
     // No-op path: leave all inner vectors empty.
     (void) problem_size;
+    (void) placed;
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    if (placed == 1)
+    // First touch on the owning thread (same map as the owner variants)
+    auto gen_owned = [&](std::size_t tid, std::size_t nt)
     {
-        // First touch on the owning thread (same map as the owner variant)
-#pragma omp parallel
+        for (std::size_t i = 0; i < n_tiles; ++i)
         {
-            const std::size_t nt = omp_get_num_threads();
-            const std::size_t tid = omp_get_thread_num();
-            for (std::size_t i = 0; i < n_tiles; ++i)
+            for (std::size_t j = 0; j < i + 1; ++j)
             {
-                for (std::size_t j = 0; j < i + 1; ++j)
+                if (tile_owner(i, j, nt) == tid)
                 {
-                    if (tile_owner(i, j, nt) == tid)
-                    {
-                        tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
-                    }
+                    tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
                 }
             }
         }
+    };
+    if (placed == 1)
+    {
+#pragma omp parallel
+        gen_owned(omp_get_thread_num(), omp_get_num_threads());
         return tiled_matrix;
     }
     if (placed == 2)
     {
-        // Same map, threads addressed as (domain team, thread in team)
-        const int nt = omp_get_max_threads();
-        const int D = (nt % 8 == 0 && nt >= 8) ? 8 : 1;
-        const int per = nt / D;
+        // Threads addressed as (domain team, thread in team)
+        const std::size_t nt = omp_get_max_threads();
+        const std::size_t D = numa_domains(nt);
+        const std::size_t per = nt / D;
         omp_set_max_active_levels(2);
 #pragma omp parallel num_threads(D)
         {
             const std::size_t d = omp_get_thread_num();
 #pragma omp parallel num_threads(per)
-            {
-                const std::size_t tid = d * per + omp_get_thread_num();
-                for (std::size_t i = 0; i < n_tiles; ++i)
-                {
-                    for (std::size_t j = 0; j < i + 1; ++j)
-                    {
-                        if (tile_owner(i, j, nt) == tid)
-                        {
-                            tiled_matrix[i * n_tiles + j] = gen_tile(i, j, tile_size, n_tiles);
-                        }
-                    }
-                }
-            }
+            gen_owned(d * per + omp_get_thread_num(), nt);
         }
         return tiled_matrix;
     }
