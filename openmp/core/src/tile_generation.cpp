@@ -95,7 +95,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
     (void) placed;
 #else
     std::size_t tile_size = problem_size / n_tiles;
-    // First touch on the owning thread (same map as the owner variants)
+    // First touch on the owning thread (same map as tile_owner)
     auto gen_owned = [&](std::size_t tid, std::size_t nt)
     {
         for (std::size_t i = 0; i < n_tiles; ++i)
@@ -109,12 +109,6 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
             }
         }
     };
-    if (placed == 1)
-    {
-#pragma omp parallel
-        gen_owned(omp_get_thread_num(), omp_get_num_threads());
-        return tiled_matrix;
-    }
     if (placed == 2)
     {
         // Threads addressed as (domain team, thread in team)
