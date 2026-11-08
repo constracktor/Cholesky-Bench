@@ -171,6 +171,7 @@ inline void submit(starpu_codelet &cl,
 void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, bool synchronize)
 {
     Codelets &cl = codelets();
+    placement::set_problem(n_tiles);
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L

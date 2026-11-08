@@ -27,6 +27,10 @@ void init();
 /// Worker that owns (generates) tile (row, col).
 int owner_worker(std::size_t row, std::size_t col);
 
+/// Announce the number of tiles per dimension of the factorization about to be submitted (task restriction is
+/// only used up to a size at which the scheduler can handle it efficiently).
+void set_problem(std::size_t n_tiles);
+
 /// Restrict @p task to the workers of the NUMA domain owning tile row @p row (the row of the tile it writes).
 void place_task(starpu_task *task, std::size_t row);
 

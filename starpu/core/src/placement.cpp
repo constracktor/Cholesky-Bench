@@ -29,6 +29,11 @@ struct Domain
 std::vector<Domain> domains;
 std::vector<int> cpu_of_worker;
 
+// Restricting tasks to workers makes the lws scheduler's pops scale with the queue length: beyond this many tiles
+// (~n^3/6 tasks) it was measured to be >5x slower (512 tiles), so only data is placed there, not tasks.
+constexpr std::size_t max_restricted_tiles = 256;
+bool restrict_tasks = true;
+
 // NUMA node of a CPU (from sysfs); 0 when unknown.
 int node_of_cpu(int cpu)
 {
@@ -80,8 +85,14 @@ int owner_worker(std::size_t row, std::size_t col)
     return d.workers[(col + row / domains.size()) % d.workers.size()];
 }
 
+void set_problem(std::size_t n_tiles) { restrict_tasks = n_tiles <= max_restricted_tiles; }
+
 void place_task(starpu_task *task, std::size_t row)
 {
+    if (!restrict_tasks)
+    {
+        return;
+    }
     // The mask is owned by this module and outlives every task.
     const Domain &d = domain_of_tile(row);
     task->workerids = const_cast<std::uint32_t *>(d.mask.data());
