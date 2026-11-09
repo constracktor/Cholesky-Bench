@@ -29,6 +29,8 @@ struct Domain
 std::vector<Domain> domains;
 std::vector<int> cpu_of_worker;
 
+constexpr int mask_word_bits = 32;  // bits per word of starpu_task::workerids
+
 // Restricting tasks to workers makes the lws scheduler's pops scale with the queue length: beyond this many tiles
 // (~n^3/6 tasks) it was measured to be >5x slower (512 tiles), so only data is placed there, not tasks.
 constexpr std::size_t max_restricted_tiles = 256;
@@ -64,7 +66,7 @@ void init()
         cpu_of_worker[w] = id;
         by_node[id >= 0 ? node_of_cpu(id) : 0].push_back(w);  // node 0 without NUMA info
     }
-    const std::size_t words = (static_cast<std::size_t>(n) + 31) / 32;
+    const std::size_t words = (static_cast<std::size_t>(n) + mask_word_bits - 1) / mask_word_bits;
     domains.clear();
     for (auto &[node, workers] : by_node)
     {
@@ -73,7 +75,7 @@ void init()
         d.mask.assign(words, 0);
         for (int w : d.workers)
         {
-            d.mask[w / 32] |= std::uint32_t{ 1 } << (w % 32);
+            d.mask[w / mask_word_bits] |= std::uint32_t{ 1 } << (w % mask_word_bits);
         }
         domains.push_back(std::move(d));
     }

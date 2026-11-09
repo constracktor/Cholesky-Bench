@@ -17,7 +17,6 @@
 #include <starpu.h>
 #include <string>
 #include <thread>
-#include <vector>
 
 namespace
 {
