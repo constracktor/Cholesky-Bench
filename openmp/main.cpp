@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <omp.h>
+#include <string>
 #include <vector>
 
 int main(int argc, char *argv[])
@@ -101,7 +102,7 @@ int main(int argc, char *argv[])
                     {
                         continue;
                     }
-                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles, mode == "task_domain" ? 2 : 0);
+                    auto tiled_matrix = gen_tiled_matrix(size, n_tiles, mode == "task_domain");
                     auto cholesky_cpu = cpu::cholesky(tiled_matrix, mode);
 
                     header += ";" + mode;

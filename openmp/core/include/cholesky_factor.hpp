@@ -29,7 +29,6 @@ inline Variant to_variant(const std::string &s)
     {
         return Variant::for_naive;
     }
-
     if (s == "task_naive")
     {
         return Variant::task_naive;
@@ -42,13 +41,12 @@ inline Variant to_variant(const std::string &s)
     {
         return Variant::task_prio;
     }
-
     if (s == "task_domain")
     {
         return Variant::task_domain;
     }
 
-    throw std::invalid_argument("Unknown Variant: " + std::string(s));
+    throw std::invalid_argument("Unknown Variant: " + s);
 }
 
 void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles);

@@ -43,21 +43,18 @@ inline void cpu_relax()
 // Spin until flag is set; yield the CPU periodically so oversubscribed runs (threads > cores) make progress
 inline void spin_wait(const std::atomic<char> &f)
 {
+    constexpr unsigned spins_before_yield = 4096;
     unsigned spins = 0;
     while (!f.load(std::memory_order_acquire))
     {
         cpu_relax();
-        if (++spins >= 4096)
+        if (++spins >= spins_before_yield)
         {
             spins = 0;
             sched_yield();
         }
     }
 }
-}  // namespace
-
-namespace cpu
-{
 
 // Robust integer square root for exact squares
 inline std::size_t isqrt_exact(std::size_t x)
@@ -75,6 +72,10 @@ inline std::unique_ptr<std::atomic<char>[]> make_flags(std::size_t n)
     }
     return flag;
 }
+}  // namespace
+
+namespace cpu
+{
 
 void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
 {

@@ -68,7 +68,7 @@ std::vector<double> gen_tile(std::size_t row, std::size_t col, std::size_t N, st
 
 std::size_t numa_domains(std::size_t n_threads)
 {
-    // Assume 8 NUMA domains, threads bound in order (OMP_PLACES=cores, OMP_PROC_BIND=close).
+    // Assume 8 NUMA domains, threads bound in order (OMP_PLACES=cores, OMP_PROC_BIND=spread,close).
     // Require >= 2 threads per domain (task_domain needs a worker besides the task-creating thread).
     constexpr std::size_t domains = 8;
     return (n_threads % domains == 0 && n_threads / domains >= 2) ? domains : 1;
@@ -81,7 +81,7 @@ std::size_t tile_owner(std::size_t row, std::size_t col, std::size_t n_threads)
     return (row % D) * per + (col + row / D) % per;
 }
 
-Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles, int placed)
+Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_tiles, bool owner_placed)
 {
     // Tiled data structure
     Tiled_vector_matrix tiled_matrix;
@@ -92,7 +92,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
 #ifdef DISABLE_COMPUTATION
     // No-op path: leave all inner vectors empty.
     (void) problem_size;
-    (void) placed;
+    (void) owner_placed;
 #else
     std::size_t tile_size = problem_size / n_tiles;
     // First touch on the owning thread (same map as tile_owner)
@@ -109,7 +109,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
             }
         }
     };
-    if (placed == 2)
+    if (owner_placed)
     {
         // Threads addressed as (domain team, thread in team)
         const std::size_t nt = omp_get_max_threads();

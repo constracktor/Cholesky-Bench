@@ -6,6 +6,8 @@
 
 #include "adapter_cblas_fp64.hpp"
 
+#include <cstdio>
+
 #ifndef DISABLE_COMPUTATION
 #ifdef ENABLE_MKL
 // MKL CBLAS and LAPACKE
@@ -39,7 +41,6 @@ void potrf(vector &A, const int N)
 
 void trsm(
     const vector &L, vector &A, const int N, const int M, const BLAS_TRANSPOSE transpose_L, const BLAS_SIDE side_L)
-
 {
 #ifndef DISABLE_COMPUTATION
     // TRSM constants
@@ -74,7 +75,7 @@ void syrk(vector &A, const vector &B, const int N)
     // SYRK constants
     const double alpha = -1.0;
     const double beta = 1.0;
-    // SYRK:A = A - B * B^T
+    // SYRK: A = A - B * B^T
     cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
 #else
     (void) A;
