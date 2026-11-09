@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
     bool has_bind = false;
     for (int i = 1; i + 1 < argc; ++i)
     {
-        if (std::string("--mca") == argv[i] && std::string("bind_threads") == argv[i + 1])
+        if (std::string(bind_key) == argv[i] && std::string(bind_val) == argv[i + 1])
         {
             has_bind = true;
         }

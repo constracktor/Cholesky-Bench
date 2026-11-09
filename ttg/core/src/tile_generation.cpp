@@ -6,6 +6,8 @@
 
 #include "tile_generation.hpp"
 
+#include <vector>
+
 #ifndef DISABLE_COMPUTATION
 #include <random>
 #endif
@@ -67,12 +69,13 @@ struct InterleavePolicy
 {
     constexpr static int mpol_default = 0;
     constexpr static int mpol_interleave = 3;
+    constexpr static unsigned long max_nodes = 1024;  // upper bound for a sane node count
 
     InterleavePolicy()
     {
         const unsigned long bits = online_node_bits();
         constexpr unsigned long word_bits = 8 * sizeof(unsigned long);
-        if (bits == 0 || bits > 1024)
+        if (bits == 0 || bits > max_nodes)
         {
             return;
         }
