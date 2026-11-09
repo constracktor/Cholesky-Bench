@@ -74,12 +74,4 @@ if(BUILD_CORE)
 
   # Link the libraries
   target_link_libraries(cholesky_std PUBLIC Cholesky::core)
-
-  if(ENABLE_VALIDATION)
-    target_compile_definitions(cholesky_std PRIVATE ENABLE_VALIDATION)
-  endif()
-
-  if(DISABLE_COMPUTATION)
-    target_compile_definitions(cholesky_std PRIVATE DISABLE_COMPUTATION)
-  endif()
 endif()

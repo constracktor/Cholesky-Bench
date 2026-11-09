@@ -15,8 +15,6 @@ typedef enum BLAS_TRANSPOSE { Blas_no_trans = 111, Blas_trans = 112 } BLAS_TRANS
 
 typedef enum BLAS_SIDE { Blas_left = 141, Blas_right = 142 } BLAS_SIDE;
 
-typedef enum BLAS_ALPHA { Blas_add = 1, Blas_substract = -1 } BLAS_ALPHA;
-
 // BLAS level 3 operations
 
 /**
@@ -44,8 +42,8 @@ vector f_trsm(vector_future f_L,
 
 /**
  * @brief FP64 Symmetric rank-k update: A = A - B * B^T
- * @param f_A Base matrix
- * @param f_B Symmetric update matrix
+ * @param A Base matrix
+ * @param B Symmetric update matrix
  * @param N matrix dimension
  * @return updated matrix A
  */

@@ -39,7 +39,7 @@ inline Variant to_variant(const std::string &s)
         return Variant::async_void;
     }
 
-    throw std::invalid_argument("Unknown Variant: " + std::string(s));
+    throw std::invalid_argument("Unknown Variant: " + s);
 }
 
 /**

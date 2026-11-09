@@ -12,7 +12,7 @@
 //
 //   hpx::shared_future            -> std_backend::future
 //   hpx::make_ready_future        -> std_backend::make_ready_future
-//   hpx::dataflow                 -> std_backend::dataflow
+//   hpx::dataflow                 -> std_backend::dataflow_on_tile
 //   hpx::wait_all                 -> std_backend::wait_all
 //   hpx::experimental::for_loop   -> std_backend::parallel_for
 //
@@ -58,6 +58,10 @@ inline constexpr std::size_t cache_line = 64;
 
 /// Maximum number of future arguments of one dataflow call (gemm takes three).
 inline constexpr unsigned max_deps = 4;
+
+/// Waiter-list entries tag a task pointer with its link slot in the low bits (task_base is 16-byte aligned).
+inline constexpr std::uintptr_t slot_mask = 15;
+static_assert(max_deps <= slot_mask);
 
 /// A unit of work. Intrusive: the link slots let a task sit in the waiter lists of up to max_deps unfinished inputs
 /// without allocating.
@@ -359,6 +363,7 @@ class pool
 
     task_base *try_pop(std::size_t id, std::size_t &rng)
     {
+        // 64-bit LCG (Knuth MMIX constants); the high bits pick the victim to start stealing from.
         rng = rng * 6'364'136'223'846'793'005ull + 1'442'695'040'888'963'407ull;
         const std::size_t start = (rng >> 33) % workers_.size();
         task_base *t = pop_local(id, 1);
@@ -470,8 +475,8 @@ struct state_base
         ready.notify_all();
         while (h != 0)
         {
-            auto *t = reinterpret_cast<task_base *>(h & ~std::uintptr_t{ 15 });
-            const unsigned slot = static_cast<unsigned>(h & 15);
+            auto *t = reinterpret_cast<task_base *>(h & ~slot_mask);
+            const unsigned slot = static_cast<unsigned>(h & slot_mask);
             h = reinterpret_cast<std::uintptr_t>(t->next[slot]);
             if (t->deps.fetch_sub(1, std::memory_order_acq_rel) == 1)
             {
