@@ -120,7 +120,7 @@ Tiled_vector_matrix gen_tiled_matrix(std::size_t problem_size, std::size_t n_til
         hpx::experimental::for_loop(
             hpx::execution::par,
             std::size_t{ 0 },
-            std::size_t(n_tiles),
+            n_tiles,
             [&](std::size_t i)
             {
                 hpx::experimental::for_loop(

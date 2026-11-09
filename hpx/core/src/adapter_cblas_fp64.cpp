@@ -17,7 +17,7 @@
 #endif
 #endif  // !DISABLE_COMPUTATION
 
-// BLAS level 3 operations
+// Future-based wrappers (delegate to the plain wrappers below)
 
 // Take over the tile owned by a future instead of copying it. Safe here because
 // the tile consumed as the in/out operand of a task is never read by another
@@ -27,20 +27,7 @@ inline static vector take(const vector_future &f) { return std::move(const_cast<
 vector f_potrf(vector_future f_A, const int N)
 {
     vector A = take(f_A);
-#ifndef DISABLE_COMPUTATION
-    // POTRF: in-place Cholesky decomposition of A
-    // use dpotrf2 recursive version for better stability
-    lapack_int info = LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
-    if (info != 0)
-    {
-        // clang-format off
-        fprintf(stderr, "LAPACKE_dpotrf2 failed: info=%d (tile not positive definite)\n", (int) info);
-        // clang-format on
-    }
-#else
-    (void) N;
-#endif
-    // return factorized matrix L
+    potrf(A, N);
     return A;
 }
 
@@ -50,35 +37,10 @@ vector f_trsm(vector_future f_L,
               const int M,
               const BLAS_TRANSPOSE transpose_L,
               const BLAS_SIDE side_L)
-
 {
     const vector &L = f_L.get();
     vector A = take(f_A);
-#ifndef DISABLE_COMPUTATION
-    // TRSM constants
-    const double alpha = 1.0;
-    // TRSM: in-place solve L(^T) * X = A or X * L(^T) = A where L lower triangular
-    cblas_dtrsm(
-        CblasRowMajor,
-        static_cast<CBLAS_SIDE>(side_L),
-        CblasLower,
-        static_cast<CBLAS_TRANSPOSE>(transpose_L),
-        CblasNonUnit,
-        N,
-        M,
-        alpha,
-        L.data(),
-        N,
-        A.data(),
-        M);
-#else
-    (void) L;
-    (void) N;
-    (void) M;
-    (void) transpose_L;
-    (void) side_L;
-#endif
-    // return vector
+    trsm(L, A, N, M, transpose_L, side_L);
     return A;
 }
 
@@ -86,17 +48,7 @@ vector f_syrk(vector_future f_A, vector_future f_B, const int N)
 {
     const vector &B = f_B.get();
     vector A = take(f_A);
-#ifndef DISABLE_COMPUTATION
-    // SYRK constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // SYRK:A = A - B * B^T
-    cblas_dsyrk(CblasRowMajor, CblasLower, CblasNoTrans, N, N, alpha, B.data(), N, beta, A.data(), N);
-#else
-    (void) B;
-    (void) N;
-#endif
-    // return updated matrix A
+    syrk(A, B, N);
     return A;
 }
 
@@ -112,40 +64,12 @@ vector f_gemm(vector_future f_A,
     vector C = take(f_C);
     const vector &B = f_B.get();
     const vector &A = f_A.get();
-#ifndef DISABLE_COMPUTATION
-    // GEMM constants
-    const double alpha = -1.0;
-    const double beta = 1.0;
-    // GEMM: C = C - A(^T) * B(^T)
-    cblas_dgemm(
-        CblasRowMajor,
-        static_cast<CBLAS_TRANSPOSE>(transpose_A),
-        static_cast<CBLAS_TRANSPOSE>(transpose_B),
-        K,
-        M,
-        N,
-        alpha,
-        A.data(),
-        K,
-        B.data(),
-        M,
-        beta,
-        C.data(),
-        M);
-#else
-    (void) A;
-    (void) B;
-    (void) N;
-    (void) M;
-    (void) K;
-    (void) transpose_A;
-    (void) transpose_B;
-#endif
-    // return updated matrix C
+    gemm(A, B, C, N, M, K, transpose_A, transpose_B);
     return C;
 }
 
 //////////////////////////////////////////////////////////
+// Plain in-place wrappers
 
 void potrf(vector &A, const int N)
 {
@@ -167,7 +91,6 @@ void potrf(vector &A, const int N)
 
 void trsm(
     const vector &L, vector &A, const int N, const int M, const BLAS_TRANSPOSE transpose_L, const BLAS_SIDE side_L)
-
 {
 #ifndef DISABLE_COMPUTATION
     // TRSM constants
