@@ -10,10 +10,9 @@
 #include "validate.hpp"
 #endif
 
-#include <hwloc.h>
-
 #include <cstdlib>
 #include <fstream>
+#include <hwloc.h>
 #include <iostream>
 #include <string>
 #include <ttg.h>
@@ -74,8 +73,8 @@ int main(int argc, char *argv[])
     const long nthreads = arg_threads(argc, argv);
 
     // Strip all custom args before passing argv to TTG's parser.
-    static const std::vector<std::string> own_args = {
-        "--threads", "--loop", "--size_start", "--size_stop", "--tiles_start", "--tiles_stop"};
+    static const std::vector<std::string> own_args = { "--threads",   "--loop",        "--size_start",
+                                                       "--size_stop", "--tiles_start", "--tiles_stop" };
     for (int i = 1; i + 1 < argc;)
     {
         bool matched = false;
@@ -84,14 +83,18 @@ int main(int argc, char *argv[])
             if (name == argv[i])
             {
                 for (int j = i; j + 2 < argc; ++j)
+                {
                     argv[j] = argv[j + 2];
+                }
                 argc -= 2;
                 matched = true;
                 break;
             }
         }
         if (!matched)
+        {
             ++i;
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -100,16 +103,22 @@ int main(int argc, char *argv[])
     // but binding must be opted in explicitly.
     static const char *bind_key = "--mca";
     static const char *bind_val = "bind_threads";
-    static const char *bind_on  = "1";
+    static const char *bind_on = "1";
     bool has_bind = false;
     for (int i = 1; i + 1 < argc; ++i)
+    {
         if (std::string("--mca") == argv[i] && std::string("bind_threads") == argv[i + 1])
+        {
             has_bind = true;
+        }
+    }
 
     std::vector<const char *> new_argv;
     new_argv.reserve(static_cast<std::size_t>(argc) + 3);
     for (int i = 0; i < argc; ++i)
+    {
         new_argv.push_back(argv[i]);
+    }
     if (!has_bind)
     {
         new_argv.push_back(bind_key);
@@ -121,8 +130,7 @@ int main(int argc, char *argv[])
     ttg::initialize(new_argc, const_cast<char **>(new_argv.data()), static_cast<int>(nthreads));
     const bool is_root = (ttg::default_execution_context().rank() == 0);
 
-    const std::size_t reported_threads =
-        (nthreads > 0) ? static_cast<std::size_t>(nthreads) : physical_core_count();
+    const std::size_t reported_threads = (nthreads > 0) ? static_cast<std::size_t>(nthreads) : physical_core_count();
 
     // print and write results
     bool HEADER_FLAG = true;
