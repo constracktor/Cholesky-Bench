@@ -24,7 +24,7 @@ jobs:
 
       - name: Add HPX 2.0.0 to the Spack recipe
         run: |
-          patch "$(spack location -p hpx)/package.py" < .github/spack/hpx-2.0.0.patch
+          bash .github/spack/add-hpx-2.0.0.sh
 
       - name: Add binary cache mirror
         run: |

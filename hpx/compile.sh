@@ -50,7 +50,12 @@ if command -v spack &>/dev/null; then
     module load gcc/14.2.0
     export CC=gcc
     export CXX=g++
-    spack load hpx@1.11.0%gcc@14.2.0 malloc=jemalloc
+    # HPX 2.0.0 is not in upstream Spack yet: patch the recipe and install it once
+    if ! spack find hpx@2.0.0%gcc@14.2.0 cxxstd=20 malloc=jemalloc &>/dev/null; then
+      bash "$(dirname "${BASH_SOURCE[0]}")/../.github/spack/add-hpx-2.0.0.sh"
+      spack install hpx@2.0.0%gcc@14.2.0 cxxstd=20 malloc=jemalloc
+    fi
+    spack load hpx@2.0.0%gcc@14.2.0 cxxstd=20 malloc=jemalloc
     spack load openblas@0.3.28%gcc@14.2.0 threads=none
 
   elif [[ "$HOSTNAME" == "nasrin0" || "$HOSTNAME" == "nasrin1" ]]; then
