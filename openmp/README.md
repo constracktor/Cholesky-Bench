@@ -9,6 +9,7 @@
 | `task_naive` | OpenMP tasking without dependencies (OpenMP 3.0) |
 | `task_depend` | OpenMP tasking with `depend` clauses (OpenMP 4.0) |
 | `task_prio` | OpenMP tasking with `priority` clauses (OpenMP 4.5) (requires `OMP_MAX_TASK_PRIORITY` to be set at runtime) |
+| `task_domain` | One nested team per NUMA domain (8 domains, needs >= 16 threads, otherwise a single domain); each team runs depend-tasks for its rows, cross-domain panel tiles awaited via atomic flags |
 
 ## Dependencies
 
@@ -45,7 +46,11 @@ OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores \
   --tiles_start 64 --tiles_stop 64
 ```
 
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--modes a,b` | all | Comma-separated list of modes to run, e.g. `--modes task_naive,task_domain` |
+
 ```bash
 sbatch run.sh          # gcc runtime (default)
-sbatch run.sh llvm     # llvm runtime
+sbatch run.sh llvm     # llvm runtime (run.sh sets OMP_PROC_BIND=spread,close, OMP_PLACES=cores)
 ```
