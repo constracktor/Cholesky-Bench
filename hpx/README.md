@@ -16,7 +16,7 @@ Common dependencies are listed in the [top-level README](../README.md#dependenci
 
 | Dependency | |
 |---|---|
-| HPX 1.11.0 + jemalloc | ✓ |
+| HPX 2.0.0 + jemalloc | ✓ (not yet in upstream Spack; `.github/spack/add-hpx-2.0.0.sh` adds the version to the local recipe) |
 
 ## Build
 
