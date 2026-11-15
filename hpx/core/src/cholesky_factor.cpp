@@ -59,84 +59,150 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
     // Parameters
     const int N = static_cast<int>(isqrt_exact(ft_tiles[0].get().size()));
     const std::size_t n_tiles = isqrt_exact(ft_tiles.size());
-    const bool sync = variant == Variant::sync_future;
-    if (variant != Variant::async_future && !sync)
+    // Variants
+    switch (variant)
     {
-        std::cout << "Variant not supported.";
-        return;
-    }
-    for (std::size_t k = 0; k < n_tiles; k++)
-    {
-        // POTRF: Compute Cholesky factor L
-        ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
-        if (sync)
-        {
-            ft_tiles[k * n_tiles + k].get();
-        }
-        submit_loop(!sync,
-                    k + 1,
-                    n_tiles,
-                    [&](std::size_t m)
+            // Asynchronous variants
+        case Variant::async_future:
+            for (std::size_t k = 0; k < n_tiles; k++)
+            {
+                // POTRF: Compute Cholesky factor L
+                ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
+                submit_loop(true,
+                            k + 1,
+                            n_tiles,
+                            [&](std::size_t m)
+                            {
+                                // TRSM:  Solve X * L^T = A
+                                ft_tiles[m * n_tiles + k] =
+                                    df(true,
+                                       m,
+                                       k,
+                                       f_trsm,
+                                       "cholesky_trsm",
+                                       ft_tiles[k * n_tiles + k],
+                                       ft_tiles[m * n_tiles + k],
+                                       N,
+                                       N,
+                                       Blas_trans,
+                                       Blas_right);
+                            });
+                submit_loop(true,
+                            k + 1,
+                            n_tiles,
+                            [&](std::size_t m)
+                            {
+                                // SYRK:  A = A - B * B^T
+                                ft_tiles[m * n_tiles + m] =
+                                    df(false,
+                                       m,
+                                       m,
+                                       f_syrk,
+                                       "cholesky_syrk",
+                                       ft_tiles[m * n_tiles + m],
+                                       ft_tiles[m * n_tiles + k],
+                                       N);
+                                for (std::size_t n = k + 1; n < m; n++)
+                                {
+                                    // GEMM: C = C - A * B^T
+                                    ft_tiles[m * n_tiles + n] =
+                                        df(false,
+                                           m,
+                                           n,
+                                           f_gemm,
+                                           "cholesky_gemm",
+                                           ft_tiles[m * n_tiles + k],
+                                           ft_tiles[n * n_tiles + k],
+                                           ft_tiles[m * n_tiles + n],
+                                           N,
+                                           N,
+                                           N,
+                                           Blas_no_trans,
+                                           Blas_trans);
+                                }
+                            });
+            }
+            break;
+            // Synchronous variants
+        case Variant::sync_future:
+            for (std::size_t k = 0; k < n_tiles; k++)
+            {
+                // POTRF: Compute Cholesky factor L
+                ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
+                {
+                    ft_tiles[k * n_tiles + k].get();
+                }
+                submit_loop(false,
+                            k + 1,
+                            n_tiles,
+                            [&](std::size_t m)
+                            {
+                                // TRSM:  Solve X * L^T = A
+                                ft_tiles[m * n_tiles + k] =
+                                    df(true,
+                                       m,
+                                       k,
+                                       f_trsm,
+                                       "cholesky_trsm",
+                                       ft_tiles[k * n_tiles + k],
+                                       ft_tiles[m * n_tiles + k],
+                                       N,
+                                       N,
+                                       Blas_trans,
+                                       Blas_right);
+                            });
+                {
+                    for (std::size_t m = k + 1; m < n_tiles; m++)
                     {
-                        // TRSM:  Solve X * L^T = A
-                        ft_tiles[m * n_tiles + k] =
-                            df(true,
-                               m,
-                               k,
-                               f_trsm,
-                               "cholesky_trsm",
-                               ft_tiles[k * n_tiles + k],
-                               ft_tiles[m * n_tiles + k],
-                               N,
-                               N,
-                               Blas_trans,
-                               Blas_right);
-                    });
-        if (sync)
-        {
-            for (std::size_t m = k + 1; m < n_tiles; m++)
-            {
-                ft_tiles[m * n_tiles + k].get();
-            }
-        }
-        submit_loop(
-            !sync,
-            k + 1,
-            n_tiles,
-            [&](std::size_t m)
-            {
-                // SYRK:  A = A - B * B^T
-                ft_tiles[m * n_tiles + m] =
-                    df(false, m, m, f_syrk, "cholesky_syrk", ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
-                for (std::size_t n = k + 1; n < m; n++)
-                {
-                    // GEMM: C = C - A * B^T
-                    ft_tiles[m * n_tiles + n] =
-                        df(false,
-                           m,
-                           n,
-                           f_gemm,
-                           "cholesky_gemm",
-                           ft_tiles[m * n_tiles + k],
-                           ft_tiles[n * n_tiles + k],
-                           ft_tiles[m * n_tiles + n],
-                           N,
-                           N,
-                           N,
-                           Blas_no_trans,
-                           Blas_trans);
+                        ft_tiles[m * n_tiles + k].get();
+                    }
                 }
-            });
-        if (sync)
-        {
-            for (std::size_t m = k + 1; m < n_tiles; m++)
-            {
-                for (std::size_t n = k + 1; n <= m; n++)
+                submit_loop(false,
+                            k + 1,
+                            n_tiles,
+                            [&](std::size_t m)
+                            {
+                                // SYRK:  A = A - B * B^T
+                                ft_tiles[m * n_tiles + m] =
+                                    df(false,
+                                       m,
+                                       m,
+                                       f_syrk,
+                                       "cholesky_syrk",
+                                       ft_tiles[m * n_tiles + m],
+                                       ft_tiles[m * n_tiles + k],
+                                       N);
+                                for (std::size_t n = k + 1; n < m; n++)
+                                {
+                                    // GEMM: C = C - A * B^T
+                                    ft_tiles[m * n_tiles + n] =
+                                        df(false,
+                                           m,
+                                           n,
+                                           f_gemm,
+                                           "cholesky_gemm",
+                                           ft_tiles[m * n_tiles + k],
+                                           ft_tiles[n * n_tiles + k],
+                                           ft_tiles[m * n_tiles + n],
+                                           N,
+                                           N,
+                                           N,
+                                           Blas_no_trans,
+                                           Blas_trans);
+                                }
+                            });
                 {
-                    ft_tiles[m * n_tiles + n].get();
+                    for (std::size_t m = k + 1; m < n_tiles; m++)
+                    {
+                        for (std::size_t n = k + 1; n <= m; n++)
+                        {
+                            ft_tiles[m * n_tiles + n].get();
+                        }
+                    }
                 }
             }
-        }
+            break;
+        default: std::cout << "Variant not supported.\n"; break;
     }
 }
 
