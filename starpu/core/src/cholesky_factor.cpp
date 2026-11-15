@@ -168,7 +168,7 @@ inline void submit(starpu_codelet &cl,
 }
 }  // namespace
 
-void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, bool synchronize)
+void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
 {
     Codelets &cl = codelets();
     placement::set_problem(n_tiles);
@@ -176,19 +176,11 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
     {
         // POTRF: Compute Cholesky factor L
         submit(cl.potrf, k, handles[k * n_tiles + k]);
-        if (synchronize)
-        {
-            starpu_task_wait_for_all();
-        }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
             submit(cl.trsm, m, handles[k * n_tiles + k], handles[m * n_tiles + k]);
-        }
-        if (synchronize)
-        {
-            starpu_task_wait_for_all();
         }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -202,10 +194,38 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles, b
                 submit(cl.gemm, m, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
             }
         }
-        if (synchronize)
+    }
+}
+
+void submit_right_looking_cholesky_sync(Tile_handles &handles, std::size_t n_tiles)
+{
+    Codelets &cl = codelets();
+    placement::set_problem(n_tiles);
+    for (std::size_t k = 0; k < n_tiles; k++)
+    {
+        // POTRF: Compute Cholesky factor L
+        submit(cl.potrf, k, handles[k * n_tiles + k]);
+        starpu_task_wait_for_all();
+
+        for (std::size_t m = k + 1; m < n_tiles; m++)
         {
-            starpu_task_wait_for_all();
+            // TRSM: Solve X * L^T = A
+            submit(cl.trsm, m, handles[k * n_tiles + k], handles[m * n_tiles + k]);
         }
+        starpu_task_wait_for_all();
+
+        for (std::size_t m = k + 1; m < n_tiles; m++)
+        {
+            // SYRK: A = A - B * B^T
+            submit(cl.syrk, m, handles[m * n_tiles + k], handles[m * n_tiles + m]);
+
+            for (std::size_t n = k + 1; n < m; n++)
+            {
+                // GEMM: C = C - A * B^T
+                submit(cl.gemm, m, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
+            }
+        }
+        starpu_task_wait_for_all();
     }
 }
 

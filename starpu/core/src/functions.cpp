@@ -23,7 +23,14 @@ double cholesky_stf(Tiled_vector_matrix &tiled_matrix, bool synchronize)
     auto start = std::chrono::high_resolution_clock::now();
     ///////////////////////////////////////////////////////////////////////////
     // Launch Cholesky decomposition: K = L * L^T
-    submit_right_looking_cholesky(handles, n_tiles, synchronize);
+    if (synchronize)
+    {
+        submit_right_looking_cholesky_sync(handles, n_tiles);
+    }
+    else
+    {
+        submit_right_looking_cholesky(handles, n_tiles);
+    }
     // Synchronize: wait for all submitted tasks
     starpu_task_wait_for_all();
     ///////////////////////////////////////////////////////////////////////////
