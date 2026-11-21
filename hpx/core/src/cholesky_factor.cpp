@@ -24,16 +24,6 @@ inline std::size_t isqrt_exact(std::size_t x)
     return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
 }
 
-// Submit one task on the owner of the tile it writes: dataflow on annotated function. The critical-path kernels
-// (POTRF, TRSM) run at high priority.
-template <typename F, typename... Args>
-static auto df(bool critical, std::size_t row, std::size_t col, F f, const char *name, Args &&...args)
-{
-    const auto priority = critical ? hpx::threads::thread_priority::high : hpx::threads::thread_priority::normal;
-    return hpx::dataflow(
-        tile_policy(row, col, priority), hpx::annotated_function(f, name), std::forward<Args>(args)...);
-}
-
 // Tiled Cholesky Algorithm
 void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles)
 {
@@ -48,7 +38,11 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
             for (std::size_t k = 0; k < n_tiles; k++)
             {
                 // POTRF: Compute Cholesky factor L
-                ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
+                ft_tiles[k * n_tiles + k] = hpx::dataflow(
+                    tile_policy(k, k, hpx::threads::thread_priority::high),
+                    hpx::annotated_function(f_potrf, "cholesky_potrf"),
+                    ft_tiles[k * n_tiles + k],
+                    N);
                 hpx::experimental::for_loop(
                     hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1)),
                     k + 1,
@@ -56,18 +50,15 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                     [&](std::size_t m)
                     {
                         // TRSM:  Solve X * L^T = A
-                        ft_tiles[m * n_tiles + k] =
-                            df(true,
-                               m,
-                               k,
-                               f_trsm,
-                               "cholesky_trsm",
-                               ft_tiles[k * n_tiles + k],
-                               ft_tiles[m * n_tiles + k],
-                               N,
-                               N,
-                               Blas_trans,
-                               Blas_right);
+                        ft_tiles[m * n_tiles + k] = hpx::dataflow(
+                            tile_policy(m, k, hpx::threads::thread_priority::high),
+                            hpx::annotated_function(f_trsm, "cholesky_trsm"),
+                            ft_tiles[k * n_tiles + k],
+                            ft_tiles[m * n_tiles + k],
+                            N,
+                            N,
+                            Blas_trans,
+                            Blas_right);
                     });
                 hpx::experimental::for_loop(
                     hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1)),
@@ -76,32 +67,26 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                     [&](std::size_t m)
                     {
                         // SYRK:  A = A - B * B^T
-                        ft_tiles[m * n_tiles + m] =
-                            df(false,
-                               m,
-                               m,
-                               f_syrk,
-                               "cholesky_syrk",
-                               ft_tiles[m * n_tiles + m],
-                               ft_tiles[m * n_tiles + k],
-                               N);
+                        ft_tiles[m * n_tiles + m] = hpx::dataflow(
+                            tile_policy(m, m, hpx::threads::thread_priority::normal),
+                            hpx::annotated_function(f_syrk, "cholesky_syrk"),
+                            ft_tiles[m * n_tiles + m],
+                            ft_tiles[m * n_tiles + k],
+                            N);
                         for (std::size_t n = k + 1; n < m; n++)
                         {
                             // GEMM: C = C - A * B^T
-                            ft_tiles[m * n_tiles + n] =
-                                df(false,
-                                   m,
-                                   n,
-                                   f_gemm,
-                                   "cholesky_gemm",
-                                   ft_tiles[m * n_tiles + k],
-                                   ft_tiles[n * n_tiles + k],
-                                   ft_tiles[m * n_tiles + n],
-                                   N,
-                                   N,
-                                   N,
-                                   Blas_no_trans,
-                                   Blas_trans);
+                            ft_tiles[m * n_tiles + n] = hpx::dataflow(
+                                tile_policy(m, n, hpx::threads::thread_priority::normal),
+                                hpx::annotated_function(f_gemm, "cholesky_gemm"),
+                                ft_tiles[m * n_tiles + k],
+                                ft_tiles[n * n_tiles + k],
+                                ft_tiles[m * n_tiles + n],
+                                N,
+                                N,
+                                N,
+                                Blas_no_trans,
+                                Blas_trans);
                         }
                     });
             }
@@ -111,23 +96,24 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
             for (std::size_t k = 0; k < n_tiles; k++)
             {
                 // POTRF: Compute Cholesky factor L
-                ft_tiles[k * n_tiles + k] = df(true, k, k, f_potrf, "cholesky_potrf", ft_tiles[k * n_tiles + k], N);
+                ft_tiles[k * n_tiles + k] = hpx::dataflow(
+                    tile_policy(k, k, hpx::threads::thread_priority::high),
+                    hpx::annotated_function(f_potrf, "cholesky_potrf"),
+                    ft_tiles[k * n_tiles + k],
+                    N);
                 ft_tiles[k * n_tiles + k].get();
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // TRSM:  Solve X * L^T = A
-                    ft_tiles[m * n_tiles + k] =
-                        df(true,
-                           m,
-                           k,
-                           f_trsm,
-                           "cholesky_trsm",
-                           ft_tiles[k * n_tiles + k],
-                           ft_tiles[m * n_tiles + k],
-                           N,
-                           N,
-                           Blas_trans,
-                           Blas_right);
+                    ft_tiles[m * n_tiles + k] = hpx::dataflow(
+                        tile_policy(m, k, hpx::threads::thread_priority::high),
+                        hpx::annotated_function(f_trsm, "cholesky_trsm"),
+                        ft_tiles[k * n_tiles + k],
+                        ft_tiles[m * n_tiles + k],
+                        N,
+                        N,
+                        Blas_trans,
+                        Blas_right);
                 }
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
@@ -136,25 +122,26 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 for (std::size_t m = k + 1; m < n_tiles; m++)
                 {
                     // SYRK:  A = A - B * B^T
-                    ft_tiles[m * n_tiles + m] = df(
-                        false, m, m, f_syrk, "cholesky_syrk", ft_tiles[m * n_tiles + m], ft_tiles[m * n_tiles + k], N);
+                    ft_tiles[m * n_tiles + m] = hpx::dataflow(
+                        tile_policy(m, m, hpx::threads::thread_priority::normal),
+                        hpx::annotated_function(f_syrk, "cholesky_syrk"),
+                        ft_tiles[m * n_tiles + m],
+                        ft_tiles[m * n_tiles + k],
+                        N);
                     for (std::size_t n = k + 1; n < m; n++)
                     {
                         // GEMM: C = C - A * B^T
-                        ft_tiles[m * n_tiles + n] =
-                            df(false,
-                               m,
-                               n,
-                               f_gemm,
-                               "cholesky_gemm",
-                               ft_tiles[m * n_tiles + k],
-                               ft_tiles[n * n_tiles + k],
-                               ft_tiles[m * n_tiles + n],
-                               N,
-                               N,
-                               N,
-                               Blas_no_trans,
-                               Blas_trans);
+                        ft_tiles[m * n_tiles + n] = hpx::dataflow(
+                            tile_policy(m, n, hpx::threads::thread_priority::normal),
+                            hpx::annotated_function(f_gemm, "cholesky_gemm"),
+                            ft_tiles[m * n_tiles + k],
+                            ft_tiles[n * n_tiles + k],
+                            ft_tiles[m * n_tiles + n],
+                            N,
+                            N,
+                            N,
+                            Blas_no_trans,
+                            Blas_trans);
                     }
                 }
                 for (std::size_t m = k + 1; m < n_tiles; m++)
@@ -175,9 +162,6 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
     // Parameters
     const int N = static_cast<int>(isqrt_exact(tiles[0].size()));
     const std::size_t n_tiles = isqrt_exact(tiles.size());
-    // The trailing-update outer loop has triangular work; this parallel
-    // execution policy adds dynamic scheduling for load balance.
-    auto par_dyn = hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1));
 
     // Variants
     switch (variant)
@@ -198,8 +182,9 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
                         trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                     });
 
+                // Triangular work: dynamic scheduling for load balance
                 hpx::experimental::for_loop(
-                    par_dyn,
+                    hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1)),
                     k + 1,
                     n_tiles,
                     [&](std::size_t m)
@@ -250,8 +235,9 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
                 // Collapsed triangular (m, n) iteration space, scheduled dynamically
                 const std::size_t r = n_tiles - k - 1;
                 const std::size_t P = r * (r + 1) / 2;
+                // Triangular work: dynamic scheduling for load balance
                 hpx::experimental::for_loop(
-                    par_dyn,
+                    hpx::execution::par.with(hpx::execution::experimental::dynamic_chunk_size(1)),
                     std::size_t(0),
                     P,
                     [&](std::size_t p)
@@ -301,52 +287,47 @@ void right_looking_cholesky_tiled_void(Tiled_vector_matrix &tiles, Tiled_void_ma
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        dep_tiles[k * n_tiles + k] =
-            df(true, k, k, potrf_f, "cholesky_potrf", dep_tiles[k * n_tiles + k], std::ref(tiles[k * n_tiles + k]), N);
+        dep_tiles[k * n_tiles + k] = hpx::dataflow(
+            tile_policy(k, k, hpx::threads::thread_priority::high),
+            hpx::annotated_function(potrf_f, "cholesky_potrf"),
+            dep_tiles[k * n_tiles + k],
+            std::ref(tiles[k * n_tiles + k]),
+            N);
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            dep_tiles[m * n_tiles + k] =
-                df(true,
-                   m,
-                   k,
-                   trsm_f,
-                   "cholesky_trsm",
-                   dep_tiles[k * n_tiles + k],  // dep on L
-                   dep_tiles[m * n_tiles + k],  // dep on A
-                   std::ref(tiles[k * n_tiles + k]),
-                   std::ref(tiles[m * n_tiles + k]),
-                   N,
-                   N,
-                   Blas_trans,
-                   Blas_right);
+            dep_tiles[m * n_tiles + k] = hpx::dataflow(
+                tile_policy(m, k, hpx::threads::thread_priority::high),
+                hpx::annotated_function(trsm_f, "cholesky_trsm"),
+                dep_tiles[k * n_tiles + k],  // dep on L
+                dep_tiles[m * n_tiles + k],  // dep on A
+                std::ref(tiles[k * n_tiles + k]),
+                std::ref(tiles[m * n_tiles + k]),
+                N,
+                N,
+                Blas_trans,
+                Blas_right);
         }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // SYRK: A = A - B * B^T
-            dep_tiles[m * n_tiles + m] =
-                df(false,
-                   m,
-                   m,
-                   syrk_f,
-                   "cholesky_syrk",
-                   dep_tiles[m * n_tiles + m],  // dep on A
-                   dep_tiles[m * n_tiles + k],  // dep on B
-                   std::ref(tiles[m * n_tiles + m]),
-                   std::cref(tiles[m * n_tiles + k]),
-                   N);
+            dep_tiles[m * n_tiles + m] = hpx::dataflow(
+                tile_policy(m, m, hpx::threads::thread_priority::normal),
+                hpx::annotated_function(syrk_f, "cholesky_syrk"),
+                dep_tiles[m * n_tiles + m],  // dep on A
+                dep_tiles[m * n_tiles + k],  // dep on B
+                std::ref(tiles[m * n_tiles + m]),
+                std::cref(tiles[m * n_tiles + k]),
+                N);
 
             for (std::size_t n = k + 1; n < m; n++)
             {
                 // GEMM: C[m,n] = C[m,n] - A[m,k] * B[n,k]^T
-                dep_tiles[m * n_tiles + n] = df(
-                    false,
-                    m,
-                    n,
-                    gemm_f,
-                    "cholesky_gemm",
+                dep_tiles[m * n_tiles + n] = hpx::dataflow(
+                    tile_policy(m, n, hpx::threads::thread_priority::normal),
+                    hpx::annotated_function(gemm_f, "cholesky_gemm"),
                     dep_tiles[m * n_tiles + k],  // dep on A
                     dep_tiles[n * n_tiles + k],  // dep on B
                     dep_tiles[m * n_tiles + n],  // dep on C
