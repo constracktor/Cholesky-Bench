@@ -19,59 +19,14 @@
 #include <immintrin.h>
 #endif
 
-// Trailing-update schedule:
-// libgomp through GCC 14.x rejects schedule(dynamic, ...) on a
-// non-rectangular collapsed loop nest.
-#ifdef ENABLE_DYNAMIC_SCHEDULE
-#define CHOL_OMP_FOR_TRAILING_COLLAPSE() _Pragma("omp for collapse(2) schedule(dynamic, 1)")
-#else
-#define CHOL_OMP_FOR_TRAILING_COLLAPSE() _Pragma("omp for collapse(2)")
-#endif
-
 namespace
 {
-// Portable spin-wait hint
-inline void cpu_relax()
-{
-#if defined(__x86_64__) || defined(__i386__)
-    _mm_pause();
-#elif defined(__aarch64__)
-    asm volatile("yield" ::: "memory");
-#endif
-}
-
-// Spin until flag is set; yield the CPU periodically so oversubscribed runs (threads > cores) make progress
-inline void spin_wait(const std::atomic<char> &f)
-{
-    constexpr unsigned spins_before_yield = 4096;
-    unsigned spins = 0;
-    while (!f.load(std::memory_order_acquire))
-    {
-        cpu_relax();
-        if (++spins >= spins_before_yield)
-        {
-            spins = 0;
-            sched_yield();
-        }
-    }
-}
-
 // Robust integer square root for exact squares
 inline std::size_t isqrt_exact(std::size_t x)
 {
     return static_cast<std::size_t>(std::lround(std::sqrt(static_cast<double>(x))));
 }
 
-// Per-tile readiness flags, all cleared
-inline std::unique_ptr<std::atomic<char>[]> make_flags(std::size_t n)
-{
-    std::unique_ptr<std::atomic<char>[]> flag(new std::atomic<char>[n]);
-    for (std::size_t i = 0; i < n; ++i)
-    {
-        flag[i].store(0, std::memory_order_relaxed);
-    }
-    return flag;
-}
 }  // namespace
 
 namespace cpu
@@ -103,7 +58,12 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                         trsm(tiles[k * n_tiles + k], tiles[m * n_tiles + k], N, N, Blas_trans, Blas_right);
                     }
 
-                    CHOL_OMP_FOR_TRAILING_COLLAPSE()
+                    // libgomp through GCC 14.x rejects schedule(dynamic, ...) on a non-rectangular collapsed loop nest
+#ifdef ENABLE_DYNAMIC_SCHEDULE
+#pragma omp for collapse(2) schedule(dynamic, 1)
+#else
+#pragma omp for collapse(2)
+#endif
                     for (std::size_t m = k + 1; m < n_tiles; ++m)
                     {
                         for (std::size_t n = k + 1; n < m + 1; ++n)
@@ -346,13 +306,11 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                 // One team per NUMA domain (nested parallel regions). Each team creates and runs the tasks of
                 // the tiles of its domain (row % D == d). Local dependencies use depend clauses, panel tiles of other
                 // domains are awaited through atomic flags before the dependent task is created.
-                auto flag = make_flags(n_tiles * n_tiles);
-                auto wait = [&](std::size_t idx)
+                std::unique_ptr<std::atomic<char>[]> flag(new std::atomic<char>[n_tiles * n_tiles]);
+                for (std::size_t i = 0; i < n_tiles * n_tiles; ++i)
                 {
-                    // Safe because numa_domains() guarantees >= 2 threads per team: another thread of the team
-                    // keeps executing the tasks (taskyield is not reliable in libgomp).
-                    spin_wait(flag[idx]);
-                };
+                    flag[i].store(0, std::memory_order_relaxed);
+                }
                 const int nt = omp_get_max_threads();
                 const int D = static_cast<int>(numa_domains(nt));
                 const int per = nt / D;
@@ -377,7 +335,23 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                             }
                             else
                             {
-                                wait(k * n_tiles + k);
+                                // Spin until the tile is ready. Safe because numa_domains() guarantees >= 2 threads per
+                                // team: another thread of the team keeps executing the tasks (taskyield is not reliable
+                                // in libgomp). Yield the CPU periodically so oversubscribed runs (threads > cores) make
+                                // progress.
+                                for (unsigned spins = 0; !flag[k * n_tiles + k].load(std::memory_order_acquire);)
+                                {
+#if defined(__x86_64__) || defined(__i386__)
+                                    _mm_pause();
+#elif defined(__aarch64__)
+                                    asm volatile("yield" ::: "memory");
+#endif
+                                    if (++spins >= 4096)
+                                    {
+                                        spins = 0;
+                                        sched_yield();
+                                    }
+                                }
                             }
                             for (std::size_t m = k + 1; m < n_tiles; ++m)
                             {
@@ -409,7 +383,24 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_vector_matrix &tiles)
                                 {
                                     if (n % D != d)
                                     {
-                                        wait(n * n_tiles + k);
+                                        // Spin until the tile is ready. Safe because numa_domains() guarantees >= 2
+                                        // threads per team: another thread of the team keeps executing the tasks
+                                        // (taskyield is not reliable in libgomp). Yield the CPU periodically so
+                                        // oversubscribed runs (threads > cores) make progress.
+                                        for (unsigned spins = 0;
+                                             !flag[n * n_tiles + k].load(std::memory_order_acquire);)
+                                        {
+#if defined(__x86_64__) || defined(__i386__)
+                                            _mm_pause();
+#elif defined(__aarch64__)
+                                            asm volatile("yield" ::: "memory");
+#endif
+                                            if (++spins >= 4096)
+                                            {
+                                                spins = 0;
+                                                sched_yield();
+                                            }
+                                        }
                                     }
                                     const std::vector<double> &tile_nk = tiles[n * n_tiles + k];
                                     std::vector<double> &tile_mn = tiles[m * n_tiles + n];
