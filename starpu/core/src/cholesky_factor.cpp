@@ -142,32 +142,6 @@ void register_tiles(Tiled_vector_matrix &tiles, Tile_handles &handles)
     }
 }
 
-namespace
-{
-// Build and submit a task directly (avoids the variadic argument parsing of starpu_task_insert).
-// The task is placed on the NUMA domain owning tile row `row`, the row of the tile it writes.
-inline void submit(starpu_codelet &cl,
-                   std::size_t row,
-                   starpu_data_handle_t h0,
-                   starpu_data_handle_t h1 = nullptr,
-                   starpu_data_handle_t h2 = nullptr)
-{
-    starpu_task *task = starpu_task_create();
-    task->cl = &cl;
-    placement::place_task(task, row);
-    task->handles[0] = h0;
-    if (h1)
-    {
-        task->handles[1] = h1;
-    }
-    if (h2)
-    {
-        task->handles[2] = h2;
-    }
-    STARPU_CHECK_RETURN_VALUE(starpu_task_submit(task), "starpu_task_submit");
-}
-}  // namespace
-
 void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
 {
     Codelets &cl = codelets();
@@ -175,23 +149,43 @@ void submit_right_looking_cholesky(Tile_handles &handles, std::size_t n_tiles)
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        submit(cl.potrf, k, handles[k * n_tiles + k]);
+        starpu_task *potrf_task = starpu_task_create();
+        potrf_task->cl = &cl.potrf;
+        placement::place_task(potrf_task, k);
+        potrf_task->handles[0] = handles[k * n_tiles + k];
+        STARPU_CHECK_RETURN_VALUE(starpu_task_submit(potrf_task), "starpu_task_submit");
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            submit(cl.trsm, m, handles[k * n_tiles + k], handles[m * n_tiles + k]);
+            starpu_task *trsm_task = starpu_task_create();
+            trsm_task->cl = &cl.trsm;
+            placement::place_task(trsm_task, m);
+            trsm_task->handles[0] = handles[k * n_tiles + k];
+            trsm_task->handles[1] = handles[m * n_tiles + k];
+            STARPU_CHECK_RETURN_VALUE(starpu_task_submit(trsm_task), "starpu_task_submit");
         }
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // SYRK: A = A - B * B^T
-            submit(cl.syrk, m, handles[m * n_tiles + k], handles[m * n_tiles + m]);
+            starpu_task *syrk_task = starpu_task_create();
+            syrk_task->cl = &cl.syrk;
+            placement::place_task(syrk_task, m);
+            syrk_task->handles[0] = handles[m * n_tiles + k];
+            syrk_task->handles[1] = handles[m * n_tiles + m];
+            STARPU_CHECK_RETURN_VALUE(starpu_task_submit(syrk_task), "starpu_task_submit");
 
             for (std::size_t n = k + 1; n < m; n++)
             {
                 // GEMM: C = C - A * B^T
-                submit(cl.gemm, m, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
+                starpu_task *gemm_task = starpu_task_create();
+                gemm_task->cl = &cl.gemm;
+                placement::place_task(gemm_task, m);
+                gemm_task->handles[0] = handles[m * n_tiles + k];
+                gemm_task->handles[1] = handles[n * n_tiles + k];
+                gemm_task->handles[2] = handles[m * n_tiles + n];
+                STARPU_CHECK_RETURN_VALUE(starpu_task_submit(gemm_task), "starpu_task_submit");
             }
         }
     }
@@ -204,25 +198,45 @@ void submit_right_looking_cholesky_sync(Tile_handles &handles, std::size_t n_til
     for (std::size_t k = 0; k < n_tiles; k++)
     {
         // POTRF: Compute Cholesky factor L
-        submit(cl.potrf, k, handles[k * n_tiles + k]);
+        starpu_task *potrf_task = starpu_task_create();
+        potrf_task->cl = &cl.potrf;
+        placement::place_task(potrf_task, k);
+        potrf_task->handles[0] = handles[k * n_tiles + k];
+        STARPU_CHECK_RETURN_VALUE(starpu_task_submit(potrf_task), "starpu_task_submit");
         starpu_task_wait_for_all();
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // TRSM: Solve X * L^T = A
-            submit(cl.trsm, m, handles[k * n_tiles + k], handles[m * n_tiles + k]);
+            starpu_task *trsm_task = starpu_task_create();
+            trsm_task->cl = &cl.trsm;
+            placement::place_task(trsm_task, m);
+            trsm_task->handles[0] = handles[k * n_tiles + k];
+            trsm_task->handles[1] = handles[m * n_tiles + k];
+            STARPU_CHECK_RETURN_VALUE(starpu_task_submit(trsm_task), "starpu_task_submit");
         }
         starpu_task_wait_for_all();
 
         for (std::size_t m = k + 1; m < n_tiles; m++)
         {
             // SYRK: A = A - B * B^T
-            submit(cl.syrk, m, handles[m * n_tiles + k], handles[m * n_tiles + m]);
+            starpu_task *syrk_task = starpu_task_create();
+            syrk_task->cl = &cl.syrk;
+            placement::place_task(syrk_task, m);
+            syrk_task->handles[0] = handles[m * n_tiles + k];
+            syrk_task->handles[1] = handles[m * n_tiles + m];
+            STARPU_CHECK_RETURN_VALUE(starpu_task_submit(syrk_task), "starpu_task_submit");
 
             for (std::size_t n = k + 1; n < m; n++)
             {
                 // GEMM: C = C - A * B^T
-                submit(cl.gemm, m, handles[m * n_tiles + k], handles[n * n_tiles + k], handles[m * n_tiles + n]);
+                starpu_task *gemm_task = starpu_task_create();
+                gemm_task->cl = &cl.gemm;
+                placement::place_task(gemm_task, m);
+                gemm_task->handles[0] = handles[m * n_tiles + k];
+                gemm_task->handles[1] = handles[n * n_tiles + k];
+                gemm_task->handles[2] = handles[m * n_tiles + n];
+                STARPU_CHECK_RETURN_VALUE(starpu_task_submit(gemm_task), "starpu_task_submit");
             }
         }
         starpu_task_wait_for_all();
